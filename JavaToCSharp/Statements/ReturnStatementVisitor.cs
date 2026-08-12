@@ -17,6 +17,14 @@ public class ReturnStatementVisitor : StatementVisitor<ReturnStmt>
             return SyntaxFactory.ReturnStatement(); // i.e. "return" in a void method
         }
 
+        if (expr is SwitchExpr switchExpr)
+        {
+            return SwitchConversion.ConvertSwitchExpression(
+                context,
+                switchExpr,
+                value => [SyntaxFactory.ReturnStatement(value)]);
+        }
+
         var exprSyntax = ExpressionVisitor.VisitExpression(context, expr);
 
         return SyntaxFactory.ReturnStatement(exprSyntax);

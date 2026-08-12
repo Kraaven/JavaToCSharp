@@ -19,6 +19,35 @@ public class ExpressionStatementVisitor : StatementVisitor<ExpressionStmt>
             return VisitVariableDeclarationStatement(context, expr);
         }
 
+        if (expression is AssignExpr assignExpr
+            && assignExpr.getOperator() == AssignExpr.Operator.ASSIGN
+            && assignExpr.getValue() is SwitchExpr switchExpr)
+        {
+            var target = ExpressionVisitor.VisitExpression(context, assignExpr.getTarget())
+                         ?? throw new InvalidOperationException("Assignment target cannot be null");
+
+            return SwitchConversion.ConvertSwitchExpression(
+                context,
+                switchExpr,
+                value =>
+                [
+                    SyntaxFactory.ExpressionStatement(
+                        SyntaxFactory.AssignmentExpression(
+                            SyntaxKind.SimpleAssignmentExpression,
+                            target,
+                            value))
+                ]);
+        }
+
+        if (expression is SwitchExpr loneSwitch)
+        {
+            // Switch expression used as a statement — execute arms for side effects / throws
+            return SwitchConversion.ConvertSwitchExpression(
+                context,
+                loneSwitch,
+                value => [SyntaxFactory.ExpressionStatement(value)]);
+        }
+
         var expressionSyntax = ExpressionVisitor.VisitExpression(context, expression);
 
         return expressionSyntax is null ? null : SyntaxFactory.ExpressionStatement(expressionSyntax);
@@ -33,6 +62,48 @@ public class ExpressionStatementVisitor : StatementVisitor<ExpressionStmt>
 
         var variableDeclarators = varExpr.getVariables()?.ToList<VariableDeclarator>() ?? [];
 
+        // Special-case: single variable initialized from a switch expression
+        if (variableDeclarators.Count == 1)
+        {
+            var item = variableDeclarators[0];
+            var initExpr = item.getInitializer().FromOptional<Expression>();
+            if (initExpr is SwitchExpr switchExpr)
+            {
+                var type = item.getType();
+                arrayRank = type.getArrayLevel();
+                string name = item.getNameAsString();
+                if (type.getArrayLevel() > 0)
+                {
+                    while (name.EndsWith("[]"))
+                    {
+                        name = name[..^2];
+                    }
+                }
+
+                var typeSyntax = TypeHelper.ConvertTypeSyntax(commonType, arrayRank ?? 0);
+
+                // Convert first so selector hoist (if any) is queued before the declaration
+                var ifElse = SwitchConversion.ConvertSwitchExpression(
+                    context,
+                    switchExpr,
+                    value =>
+                    [
+                        SyntaxFactory.ExpressionStatement(
+                            SyntaxFactory.AssignmentExpression(
+                                SyntaxKind.SimpleAssignmentExpression,
+                                SyntaxFactory.IdentifierName(name),
+                                value))
+                    ]);
+
+                context.PendingStatements.Add(
+                    SyntaxFactory.LocalDeclarationStatement(
+                        SyntaxFactory.VariableDeclaration(typeSyntax)
+                            .AddVariables(SyntaxFactory.VariableDeclarator(name))));
+
+                return ifElse;
+            }
+        }
+
         foreach (var item in variableDeclarators)
         {
             var type = item.getType();
@@ -44,7 +115,6 @@ public class ExpressionStatementVisitor : StatementVisitor<ExpressionStmt>
 
             arrayRank ??= type.getArrayLevel();
 
-            var id = item.getType();
             string name = item.getNameAsString();
 
             if (type.getArrayLevel() > 0)
@@ -72,9 +142,9 @@ public class ExpressionStatementVisitor : StatementVisitor<ExpressionStmt>
             }
         }
 
-        var typeSyntax = TypeHelper.ConvertTypeSyntax(commonType, arrayRank ?? 0);
+        var typeSyntaxFinal = TypeHelper.ConvertTypeSyntax(commonType, arrayRank ?? 0);
 
         return SyntaxFactory.LocalDeclarationStatement(
-            SyntaxFactory.VariableDeclaration(typeSyntax, SyntaxFactory.SeparatedList(variables, Enumerable.Repeat(SyntaxFactory.Token(SyntaxKind.CommaToken), variables.Count - 1))));
+            SyntaxFactory.VariableDeclaration(typeSyntaxFinal, SyntaxFactory.SeparatedList(variables, Enumerable.Repeat(SyntaxFactory.Token(SyntaxKind.CommaToken), Math.Max(variables.Count - 1, 0)))));
     }
 }

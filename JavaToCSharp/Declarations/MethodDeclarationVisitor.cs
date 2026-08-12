@@ -37,7 +37,9 @@ public class MethodDeclarationVisitor : BodyDeclarationVisitor<MethodDeclaration
         var returnType = methodDecl.getType();
         var returnTypeName = TypeHelper.ConvertType(returnType.toString());
 
-        var methodName = TypeHelper.Capitalize(methodDecl.getNameAsString());
+        var methodName = context.PreserveJavaMethodNames
+            ? methodDecl.getNameAsString()
+            : TypeHelper.Capitalize(methodDecl.getNameAsString());
         methodName = TypeHelper.ReplaceCommonMethodNames(methodName);
 
         string typeParameters = methodDecl.getTypeParameters().ToString() ?? "";
@@ -81,7 +83,9 @@ public class MethodDeclarationVisitor : BodyDeclarationVisitor<MethodDeclaration
         var returnType = methodDecl.getType();
         var returnTypeName = TypeHelper.ConvertType(returnType.toString());
 
-        var methodName = TypeHelper.Capitalize(methodDecl.getNameAsString());
+        var methodName = context.PreserveJavaMethodNames
+            ? methodDecl.getNameAsString()
+            : TypeHelper.Capitalize(methodDecl.getNameAsString());
         methodName = TypeHelper.ReplaceCommonMethodNames(methodName);
 
         string typeParameters = methodDecl.getTypeParameters().ToString() ?? "";
@@ -116,12 +120,18 @@ public class MethodDeclarationVisitor : BodyDeclarationVisitor<MethodDeclaration
             {
                 string name = annotation.getNameAsString();
 
-                // ignore @Override annotation on interface-only classes. Unfortunately this is as good as we can get for now.
-                if (name == "Override"
-                    && extends.Count > 0)
+                // ignore @Override on interface-only types; Object methods still need C# override.
+                // Record component accessors use @Override in Java but are not virtual in our class form.
+                if (name == "Override" && !IsRecordComponentAccessor(context, methodDecl))
                 {
-                    methodSyntax = methodSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.OverrideKeyword));
-                    isOverride = true;
+                    string javaMethodName = methodDecl.getNameAsString();
+                    bool isObjectMethod = javaMethodName is "equals" or "hashCode" or "toString";
+
+                    if (extends.Count > 0 || isObjectMethod || context.IsConvertingEnumConstantBody)
+                    {
+                        methodSyntax = methodSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.OverrideKeyword));
+                        isOverride = true;
+                    }
                 }
                 // add annotation if a mapping is found
                 else if (context.Options is not null && context.Options.SyntaxMappings.AnnotationMappings.TryGetValue(name, out var mappedAnnotation))
@@ -208,5 +218,11 @@ public class MethodDeclarationVisitor : BodyDeclarationVisitor<MethodDeclaration
         }
 
         return methodSyntax;
+    }
+
+    private static bool IsRecordComponentAccessor(ConversionContext context, MethodDeclaration methodDecl)
+    {
+        return (methodDecl.getParameters()?.size() ?? 0) == 0
+               && context.RecordComponentNames.Contains(methodDecl.getNameAsString());
     }
 }

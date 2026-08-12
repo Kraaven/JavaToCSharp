@@ -16,8 +16,25 @@ public class InstanceOfExpressionVisitor : ExpressionVisitor<InstanceOfExpr>
             return null;
         }
 
-        var type = TypeHelper.ConvertTypeOf(expr);
+        if (expr.getPattern().isPresent() && expr.getPattern().get() is PatternExpr pattern)
+        {
+            var typeName = TypeHelper.ConvertType(pattern.getType().toString());
+            typeName = TypeHelper.ReplaceWildcardsWithTypeParameters(typeName, context.TypeParameterNames);
 
-        return SyntaxFactory.BinaryExpression(SyntaxKind.IsExpression, exprSyntax, SyntaxFactory.IdentifierName(type));
+            return SyntaxFactory.IsPatternExpression(
+                exprSyntax,
+                SyntaxFactory.DeclarationPattern(
+                    SyntaxFactory.ParseTypeName(typeName),
+                    SyntaxFactory.SingleVariableDesignation(
+                        SyntaxFactory.Identifier(TypeHelper.EscapeIdentifier(pattern.getNameAsString())))));
+        }
+
+        var type = TypeHelper.ConvertTypeOf(expr);
+        type = TypeHelper.ReplaceWildcardsWithTypeParameters(type, context.TypeParameterNames);
+
+        return SyntaxFactory.BinaryExpression(
+            SyntaxKind.IsExpression,
+            exprSyntax,
+            SyntaxFactory.IdentifierName(type));
     }
 }

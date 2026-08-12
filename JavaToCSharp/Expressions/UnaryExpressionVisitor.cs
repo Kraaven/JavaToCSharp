@@ -25,7 +25,15 @@ public class UnaryExpressionVisitor : ExpressionVisitor<UnaryExpr>
         else if (op == UnaryExpr.Operator.MINUS)
             kind = SyntaxKind.UnaryMinusExpression;
         else if (op == UnaryExpr.Operator.LOGICAL_COMPLEMENT)
+        {
+            // Convert !(x is T y) into x is not T y
+            if (TryConvertToIsNotPattern(exprSyntax, out var isNotPattern))
+            {
+                return isNotPattern;
+            }
+
             kind = SyntaxKind.LogicalNotExpression;
+        }
         else if (op == UnaryExpr.Operator.POSTFIX_DECREMENT)
         {
             kind = SyntaxKind.PostDecrementExpression;
@@ -46,5 +54,25 @@ public class UnaryExpressionVisitor : ExpressionVisitor<UnaryExpr>
         return isPostfix
                    ? SyntaxFactory.PostfixUnaryExpression(kind, exprSyntax)
                    : SyntaxFactory.PrefixUnaryExpression(kind, exprSyntax);
+    }
+
+    private static bool TryConvertToIsNotPattern(ExpressionSyntax exprSyntax, out ExpressionSyntax? result)
+    {
+        result = null;
+
+        while (exprSyntax is ParenthesizedExpressionSyntax parenthesized)
+        {
+            exprSyntax = parenthesized.Expression;
+        }
+
+        if (exprSyntax is not IsPatternExpressionSyntax isPattern)
+        {
+            return false;
+        }
+
+        result = SyntaxFactory.IsPatternExpression(
+            isPattern.Expression,
+            SyntaxFactory.UnaryPattern(SyntaxFactory.Token(SyntaxKind.NotKeyword), isPattern.Pattern));
+        return true;
     }
 }

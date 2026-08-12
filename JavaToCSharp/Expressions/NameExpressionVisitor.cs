@@ -6,6 +6,15 @@ namespace JavaToCSharp.Expressions;
 
 public class NameExpressionVisitor : ExpressionVisitor<NameExpr>
 {
-    protected override ExpressionSyntax Visit(ConversionContext context, NameExpr nameExpr) =>
-        SyntaxFactory.IdentifierName(TypeHelper.EscapeIdentifier(nameExpr.getNameAsString()));
+    protected override ExpressionSyntax Visit(ConversionContext context, NameExpr nameExpr)
+    {
+        string name = nameExpr.getNameAsString();
+
+        if (context.RecordComponentBackingFields.TryGetValue(name, out string? backingField))
+        {
+            name = backingField;
+        }
+
+        return SyntaxFactory.IdentifierName(TypeHelper.EscapeIdentifier(name));
+    }
 }

@@ -16,7 +16,9 @@ public class MethodCallExpressionVisitor : ExpressionVisitor<MethodCallExpr>
         var scope = methodCallExpr.getScope().FromOptional<Expression>();
         ExpressionSyntax? scopeSyntax = null;
 
-        var methodName = TypeHelper.Capitalize(methodCallExpr.getNameAsString());
+        var methodName = context.PreserveJavaMethodNames
+            ? methodCallExpr.getNameAsString()
+            : TypeHelper.Capitalize(methodCallExpr.getNameAsString());
         methodName = TypeHelper.ReplaceCommonMethodNames(methodName);
 
         if (scope is not null)

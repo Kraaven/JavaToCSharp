@@ -31,7 +31,14 @@ public class FieldAccessExpressionVisitor : ExpressionVisitor<FieldAccessExpr>
             return null;
         }
 
-        var field = TypeHelper.EscapeIdentifier(fieldAccessExpr.getNameAsString());
+        var field = fieldAccessExpr.getNameAsString();
+
+        if (context.RecordComponentBackingFields.TryGetValue(field, out string? backingField))
+        {
+            field = backingField;
+        }
+
+        field = TypeHelper.EscapeIdentifier(field);
         // array length accessor should be capitalized
         field = field == "length" ? "Length" : field;
 

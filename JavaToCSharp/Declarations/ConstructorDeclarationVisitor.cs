@@ -1,7 +1,9 @@
 ﻿using com.github.javaparser.ast;
 using com.github.javaparser.ast.body;
+using com.github.javaparser.ast.expr;
 using com.github.javaparser.ast.stmt;
 using com.github.javaparser.ast.type;
+using JavaToCSharp.Expressions;
 using JavaToCSharp.Statements;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -74,7 +76,22 @@ public class ConstructorDeclarationVisitor : BodyDeclarationVisitor<ConstructorD
             var initArgs = ctorInvStmt.getArguments();
             if (initArgs is not null && initArgs.size() > 0)
             {
-                argsSyntax = TypeHelper.GetSyntaxFromArguments(context, initArgs);
+                // Use `default` instead of `null` in constructor initializers so generic
+                // type parameters (common in records) convert cleanly.
+                var argSyntaxes = new List<ArgumentSyntax>();
+                foreach (var arg in initArgs.OfType<Expression>())
+                {
+                    ExpressionSyntax? argSyntax = arg is NullLiteralExpr
+                        ? SyntaxFactory.LiteralExpression(SyntaxKind.DefaultLiteralExpression)
+                        : ExpressionVisitor.VisitExpression(context, arg);
+
+                    if (argSyntax is not null)
+                    {
+                        argSyntaxes.Add(SyntaxFactory.Argument(argSyntax));
+                    }
+                }
+
+                argsSyntax = SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(argSyntaxes));
             }
 
             var constructorInitSyntax = SyntaxFactory.ConstructorInitializer(ctorInvStmt.isThis()

@@ -30,6 +30,7 @@ public static class TypeHelper
         ["Map"] = "Dictionary",
         ["Set"] = "HashSet",
         ["Iterator"] = "IEnumerator",
+        ["Comparable"] = "IComparable",
 
         // Exceptions
         ["AlreadyClosedException"] = "ObjectDisposedException",
@@ -132,8 +133,39 @@ public static class TypeHelper
             "hashcode" => "GetHashCode",
             "getclass" => "GetType",
             "close" => "Dispose",
+            "touppercase" => "ToUpper",
+            "tolowercase" => "ToLower",
+            "equals" => "Equals",
+            "tostring" => "ToString",
             _ => name,
         };
+    }
+
+    /// <summary>
+    /// Replaces <c>TWildcardTodo</c> placeholders from Java <c>?</c> wildcards with the
+    /// current type's type parameter names when available.
+    /// </summary>
+    public static string ReplaceWildcardsWithTypeParameters(string typeName, IList<string> typeParameterNames)
+    {
+        if (typeParameterNames.Count == 0 || !typeName.Contains("TWildcardTodo", StringComparison.Ordinal))
+        {
+            return typeName;
+        }
+
+        int paramIndex = 0;
+        while (typeName.Contains("TWildcardTodo", StringComparison.Ordinal) && paramIndex < typeParameterNames.Count)
+        {
+            typeName = ReplaceFirst(typeName, "TWildcardTodo", typeParameterNames[paramIndex]);
+            paramIndex++;
+        }
+
+        return typeName;
+    }
+
+    private static string ReplaceFirst(string text, string search, string replace)
+    {
+        int index = text.IndexOf(search, StringComparison.Ordinal);
+        return index < 0 ? text : string.Concat(text.AsSpan(0, index), replace, text.AsSpan(index + search.Length));
     }
 
     public static TypeSyntax GetSyntaxFromType(ClassOrInterfaceType type)
@@ -236,6 +268,36 @@ public static class TypeHelper
                 {
                     var scopeSyntaxLength = ExpressionVisitor.VisitExpression(context, scope);
                     transformedSyntax = ReplaceMethodByProperty(scopeSyntaxLength, "Length");
+                    return true;
+                }
+
+                case "compare" when args.size() == 2
+                                    && scope is NameExpr nameExpr
+                                    && nameExpr.getNameAsString() is "Integer" or "Long" or "Double" or "Float"
+                                                                        or "Short" or "Byte" or "Boolean" or "Character":
+                {
+                    var compareArgs = args.OfType<Expression>().ToList();
+                    if (compareArgs.Count < 2)
+                    {
+                        transformedSyntax = null;
+                        return false;
+                    }
+
+                    var left = ExpressionVisitor.VisitExpression(context, compareArgs[0]);
+                    var right = ExpressionVisitor.VisitExpression(context, compareArgs[1]);
+                    if (left is null || right is null)
+                    {
+                        transformedSyntax = null;
+                        return false;
+                    }
+
+                    transformedSyntax = SyntaxFactory.InvocationExpression(
+                            SyntaxFactory.MemberAccessExpression(
+                                SyntaxKind.SimpleMemberAccessExpression,
+                                left,
+                                SyntaxFactory.IdentifierName("CompareTo")))
+                        .WithArgumentList(SyntaxFactory.ArgumentList(
+                            SyntaxFactory.SingletonSeparatedList(SyntaxFactory.Argument(right))));
                     return true;
                 }
 

@@ -1,4 +1,5 @@
-﻿using com.github.javaparser.ast.stmt;
+using com.github.javaparser.ast.stmt;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace JavaToCSharp.Statements;
@@ -39,18 +40,41 @@ public abstract class StatementVisitor
             { typeof(TryStmt), new TryStatementVisitor() },
             { typeof(WhileStmt), new WhileStatementVisitor() },
             { typeof(EmptyStmt), new EmptyStatementVisitor() },
-            { typeof(LocalClassDeclarationStmt), new TypeDeclarationStatementVisitor() }
+            { typeof(LocalClassDeclarationStmt), new TypeDeclarationStatementVisitor() },
+            { typeof(LocalRecordDeclarationStmt), new LocalRecordDeclarationStatementVisitor() }
         };
     }
 
     protected abstract StatementSyntax? Visit(ConversionContext context, Statement statement);
 
     public static List<StatementSyntax> VisitStatements(ConversionContext context, IEnumerable<Statement>? statements)
-        => statements is null
-            ? []
-            : statements.Select(statement => VisitStatement(context, statement))
-                        .OfType<StatementSyntax>() // filter out nulls
-                        .ToList();
+    {
+        if (statements is null)
+        {
+            return [];
+        }
+
+        var result = new List<StatementSyntax>();
+
+        foreach (var statement in statements)
+        {
+            var syntax = VisitStatement(context, statement);
+            if (syntax != null)
+            {
+                // Flatten synthetic blocks that only exist to carry pending statements
+                if (syntax is BlockSyntax block && statement is not BlockStmt)
+                {
+                    result.AddRange(block.Statements);
+                }
+                else
+                {
+                    result.Add(syntax);
+                }
+            }
+        }
+
+        return result;
+    }
 
     public static StatementSyntax? VisitStatement(ConversionContext context, Statement statement)
     {
@@ -60,6 +84,19 @@ public abstract class StatementVisitor
             throw new InvalidOperationException(message);
         }
 
-        return visitor.Visit(context, statement).WithJavaComments(context, statement);
+        var syntax = visitor.Visit(context, statement).WithJavaComments(context, statement);
+        var pending = context.DrainPendingStatements();
+
+        if (pending.Count == 0)
+        {
+            return syntax;
+        }
+
+        if (syntax is null)
+        {
+            return pending.Count == 1 ? pending[0] : SyntaxFactory.Block(pending);
+        }
+
+        return SyntaxFactory.Block(pending.Append(syntax));
     }
 }

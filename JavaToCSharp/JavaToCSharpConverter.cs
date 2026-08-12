@@ -95,6 +95,11 @@ public static class JavaToCSharpConverter
                 var enumSyntax = EnumDeclarationVisitor.VisitEnumDeclaration(context, enumType);
                 rootMembers.Add(enumSyntax.NormalizeWhitespace().WithTrailingNewLines());
             }
+            else if (type is RecordDeclaration recordType)
+            {
+                var recordSyntax = RecordDeclarationVisitor.VisitRecordDeclaration(context, recordType);
+                rootMembers.Add(recordSyntax.NormalizeWhitespace().WithTrailingNewLines());
+            }
         }
 
         if (rootMembers.Count > 1)
