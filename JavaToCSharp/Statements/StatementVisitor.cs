@@ -41,7 +41,8 @@ public abstract class StatementVisitor
             { typeof(WhileStmt), new WhileStatementVisitor() },
             { typeof(EmptyStmt), new EmptyStatementVisitor() },
             { typeof(LocalClassDeclarationStmt), new TypeDeclarationStatementVisitor() },
-            { typeof(LocalRecordDeclarationStmt), new LocalRecordDeclarationStatementVisitor() }
+            { typeof(LocalRecordDeclarationStmt), new LocalRecordDeclarationStatementVisitor() },
+            { typeof(YieldStmt), new YieldStatementVisitor() }
         };
     }
 

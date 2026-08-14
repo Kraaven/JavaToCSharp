@@ -1,6 +1,8 @@
 ﻿using com.github.javaparser.ast.expr;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Ast = com.github.javaparser.ast;
+using Type = com.github.javaparser.ast.type.Type;
 
 namespace JavaToCSharp.Expressions;
 
@@ -49,15 +51,20 @@ public class MethodCallExpressionVisitor : ExpressionVisitor<MethodCallExpr>
             methodName = mappedMethodName;
         }
 
+        SimpleNameSyntax methodSimpleName = CreateMethodName(methodCallExpr, methodName);
+
         ExpressionSyntax methodExpression;
 
         if (scopeSyntax is null)
         {
-            methodExpression = SyntaxFactory.IdentifierName(methodName);
+            methodExpression = methodSimpleName;
         }
         else
         {
-            methodExpression = SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, scopeSyntax, SyntaxFactory.IdentifierName(methodName));
+            methodExpression = SyntaxFactory.MemberAccessExpression(
+                SyntaxKind.SimpleMemberAccessExpression,
+                scopeSyntax,
+                methodSimpleName);
         }
 
         var args = methodCallExpr.getArguments();
@@ -68,6 +75,22 @@ public class MethodCallExpressionVisitor : ExpressionVisitor<MethodCallExpr>
         }
 
         return SyntaxFactory.InvocationExpression(methodExpression, TypeHelper.GetSyntaxFromArguments(context, args));
+    }
+
+    private static SimpleNameSyntax CreateMethodName(MethodCallExpr methodCallExpr, string methodName)
+    {
+        var typeArgs = methodCallExpr.getTypeArguments().FromOptional<Ast.NodeList>()?.ToList<Type>();
+        if (typeArgs is not { Count: > 0 })
+        {
+            return SyntaxFactory.IdentifierName(methodName);
+        }
+
+        var typeArgSyntaxes = typeArgs
+            .Select(t => SyntaxFactory.ParseTypeName(TypeHelper.ConvertType(t.toString())))
+            .ToArray();
+
+        return SyntaxFactory.GenericName(methodName)
+            .AddTypeArgumentListArguments(typeArgSyntaxes);
     }
 
     private static bool TryGetMappedMethodName(string methodName, Expression? scope, ConversionContext context, out string mappedMethodName)

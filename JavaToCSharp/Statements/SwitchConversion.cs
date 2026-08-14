@@ -42,21 +42,46 @@ public static class SwitchConversion
         SwitchExpr switchExpr,
         Func<ExpressionSyntax, IEnumerable<StatementSyntax>> resultSink)
     {
-        var selectorSyntax = ExpressionVisitor.VisitExpression(context, switchExpr.getSelector())
-                             ?? throw new InvalidOperationException("Switch expression selector cannot be null");
+        var previousSink = context.SwitchExpressionResultSink;
+        context.SwitchExpressionResultSink = resultSink;
 
-        var entries = switchExpr.getEntries().ToList<SwitchEntry>() ?? [];
-        var (selectorExpr, hoist) = PossiblyHoistSelector(context, selectorSyntax);
-
-        var arms = BuildExpressionArms(context, entries, selectorExpr, resultSink);
-        var ifElse = WithConversionComment(BuildIfElseChain(arms));
-
-        if (hoist is not null)
+        try
         {
-            context.PendingStatements.Add(hoist);
-        }
+            var selectorSyntax = ExpressionVisitor.VisitExpression(context, switchExpr.getSelector())
+                                 ?? throw new InvalidOperationException("Switch expression selector cannot be null");
 
-        return ifElse;
+            var entries = switchExpr.getEntries().ToList<SwitchEntry>() ?? [];
+            var (selectorExpr, hoist) = PossiblyHoistSelector(context, selectorSyntax);
+
+            var arms = BuildExpressionArms(context, entries, selectorExpr, resultSink);
+            var ifElse = WithConversionComment(BuildIfElseChain(arms));
+
+            if (hoist is not null)
+            {
+                context.PendingStatements.Add(hoist);
+            }
+
+            return ifElse;
+        }
+        finally
+        {
+            context.SwitchExpressionResultSink = previousSink;
+        }
+    }
+
+    /// <summary>
+    /// Converts a Java <c>yield</c> into the enclosing switch-expression result sink
+    /// (assignment, return, etc.).
+    /// </summary>
+    public static IEnumerable<StatementSyntax> ConvertYield(ConversionContext context, YieldStmt yieldStmt)
+    {
+        var sink = context.SwitchExpressionResultSink
+                   ?? throw new InvalidOperationException("yield is only valid inside a switch expression");
+
+        var value = ExpressionVisitor.VisitExpression(context, yieldStmt.getExpression())
+                    ?? throw new InvalidOperationException("yield expression cannot be null");
+
+        return sink(value);
     }
 
     /// <summary>
@@ -192,7 +217,7 @@ public static class SwitchConversion
 
                 result.AddRange(ConvertCaseStatement(context, statement));
 
-                if (statement is ReturnStmt or ThrowStmt or ContinueStmt)
+                if (statement is ReturnStmt or ThrowStmt or ContinueStmt or YieldStmt)
                 {
                     return result;
                 }
@@ -286,15 +311,8 @@ public static class SwitchConversion
     {
         if (statement is YieldStmt yieldStmt)
         {
-            if (resultSink is null)
-            {
-                throw new InvalidOperationException("yield is only valid inside a switch expression");
-            }
-
-            var value = ExpressionVisitor.VisitExpression(context, yieldStmt.getExpression())
-                        ?? throw new InvalidOperationException("yield expression cannot be null");
             var pending = context.DrainPendingStatements();
-            return pending.Concat(resultSink(value));
+            return pending.Concat(ConvertYield(context, yieldStmt));
         }
 
         return ConvertCaseStatement(context, statement);
@@ -325,12 +343,33 @@ public static class SwitchConversion
         SwitchEntry entry)
     {
         var labels = entry.getLabels().ToList<Expression>() ?? [];
+
+        // JavaParser 3.26+: use isDefault() (covers bare default and `case null, default`)
+        if (entry.isDefault()
+            && (labels.Count == 0 || labels.All(static l => l is NullLiteralExpr)))
+        {
+            return null;
+        }
+
         if (labels.Count == 0)
         {
             return null; // default
         }
 
-        return BuildOrCondition(context, selectorExpr, labels);
+        ExpressionSyntax condition = BuildOrCondition(context, selectorExpr, labels);
+
+        var guard = entry.getGuard().FromOptional<Expression>();
+        if (guard is not null)
+        {
+            var guardSyntax = ExpressionVisitor.VisitExpression(context, guard)
+                              ?? throw new InvalidOperationException("Switch guard cannot be null");
+            condition = SyntaxFactory.BinaryExpression(
+                SyntaxKind.LogicalAndExpression,
+                condition,
+                guardSyntax);
+        }
+
+        return condition;
     }
 
     private static ExpressionSyntax BuildOrCondition(
@@ -359,17 +398,7 @@ public static class SwitchConversion
     {
         if (label is PatternExpr pattern)
         {
-            var typeName = TypeHelper.ConvertType(pattern.getType().toString());
-            typeName = TypeHelper.ReplaceWildcardsWithTypeParameters(typeName, context.TypeParameterNames);
-
-            ExpressionSyntax patternCondition = SyntaxFactory.IsPatternExpression(
-                selectorExpr,
-                SyntaxFactory.DeclarationPattern(
-                    SyntaxFactory.ParseTypeName(typeName),
-                    SyntaxFactory.SingleVariableDesignation(
-                        SyntaxFactory.Identifier(TypeHelper.EscapeIdentifier(pattern.getNameAsString())))));
-
-            return patternCondition;
+            return PatternConversion.PatternToIsCondition(context, selectorExpr, pattern);
         }
 
         if (label is NullLiteralExpr)

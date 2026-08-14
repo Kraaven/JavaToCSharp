@@ -16,6 +16,13 @@ public class ConversionContext(JavaConversionOptions options)
     /// </summary>
     public List<StatementSyntax> PendingStatements { get; } = new();
 
+    /// <summary>
+    /// When converting a Java switch expression, how each yielded/result value is consumed
+    /// (assignment into a temp, <c>return</c>, etc.). Nested <c>yield</c> statements use this
+    /// even when they appear inside <c>if</c>/<c>while</c>/classic <c>switch</c>.
+    /// </summary>
+    public Func<ExpressionSyntax, IEnumerable<StatementSyntax>>? SwitchExpressionResultSink { get; set; }
+
     public string NextTempName(string prefix) => $"{prefix}{++_tempCounter}";
 
     public List<StatementSyntax> DrainPendingStatements()

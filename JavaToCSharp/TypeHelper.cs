@@ -119,12 +119,14 @@ public static class TypeHelper
     public static string EscapeIdentifier(string name)
     {
         // @ (C# Reference): https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/tokens/verbatim
-        return name switch {
-            "string" or "ref" or "object" or "int" or "short" or "float" or "long" or "double" or "decimal" or "in" or
-            "out" or "byte" or "class" or "delegate" or "params" or "is" or "as" or "base" or "namespace" or "event" or
-            "lock" or "operator" or "override" => "@" + name,
-            _ => name,
-        };
+        // Only reserved keywords need escaping; contextual keywords (type, var, value, …) are valid identifiers.
+        var kind = SyntaxFacts.GetKeywordKind(name);
+        if (kind != SyntaxKind.None && SyntaxFacts.IsReservedKeyword(kind))
+        {
+            return "@" + name;
+        }
+
+        return name;
     }
 
     public static string ReplaceCommonMethodNames(string name)

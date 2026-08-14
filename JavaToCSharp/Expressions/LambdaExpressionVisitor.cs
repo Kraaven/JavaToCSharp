@@ -51,7 +51,7 @@ public class LambdaExpressionVisitor : ExpressionVisitor<LambdaExpr>
                 attributeLists: [],
                 modifiers: modifiers,
                 type: TypeHelper.ConvertTypeSyntax(type, arrayLevel),
-                identifier: SyntaxFactory.ParseToken(identifier),
+                identifier: SyntaxFactory.Identifier(identifier),
                 @default: null);
 
             paramSyntaxes.Add(paramSyntax);

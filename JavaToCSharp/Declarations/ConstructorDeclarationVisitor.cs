@@ -1,9 +1,7 @@
 ﻿using com.github.javaparser.ast;
 using com.github.javaparser.ast.body;
-using com.github.javaparser.ast.expr;
 using com.github.javaparser.ast.stmt;
 using com.github.javaparser.ast.type;
-using JavaToCSharp.Expressions;
 using JavaToCSharp.Statements;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -45,7 +43,7 @@ public class ConstructorDeclarationVisitor : BodyDeclarationVisitor<ConstructorD
             foreach (var param in parameters)
             {
                 var name = param.getNameAsString();
-                var paramSyntax = SyntaxFactory.Parameter(SyntaxFactory.ParseToken(TypeHelper.EscapeIdentifier(name)));
+                var paramSyntax = SyntaxFactory.Parameter(SyntaxFactory.Identifier(TypeHelper.EscapeIdentifier(name)));
 
                 if (param.isVarArgs())
                 {
@@ -64,44 +62,15 @@ public class ConstructorDeclarationVisitor : BodyDeclarationVisitor<ConstructorD
         }
 
         var block = ctorDecl.getBody();
-        var statements = block.getStatements().ToList<Statement>();
+        var statements = block.getStatements().ToList<Statement>() ?? [];
 
-        // handle special case for constructor invocation
-        if (statements is {Count: > 0} && statements[0] is ExplicitConstructorInvocationStmt ctorInvStmt)
+        var (initializer, remainingStatements) = ConstructorConversion.ExtractInitializer(context, statements);
+        if (initializer is not null)
         {
-            statements.RemoveAt(0);
-
-            ArgumentListSyntax? argsSyntax = null;
-
-            var initArgs = ctorInvStmt.getArguments();
-            if (initArgs is not null && initArgs.size() > 0)
-            {
-                // Use `default` instead of `null` in constructor initializers so generic
-                // type parameters (common in records) convert cleanly.
-                var argSyntaxes = new List<ArgumentSyntax>();
-                foreach (var arg in initArgs.OfType<Expression>())
-                {
-                    ExpressionSyntax? argSyntax = arg is NullLiteralExpr
-                        ? SyntaxFactory.LiteralExpression(SyntaxKind.DefaultLiteralExpression)
-                        : ExpressionVisitor.VisitExpression(context, arg);
-
-                    if (argSyntax is not null)
-                    {
-                        argSyntaxes.Add(SyntaxFactory.Argument(argSyntax));
-                    }
-                }
-
-                argsSyntax = SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(argSyntaxes));
-            }
-
-            var constructorInitSyntax = SyntaxFactory.ConstructorInitializer(ctorInvStmt.isThis()
-                ? SyntaxKind.ThisConstructorInitializer
-                : SyntaxKind.BaseConstructorInitializer, argsSyntax);
-
-            ctorSyntax = ctorSyntax.WithInitializer(constructorInitSyntax);
+            ctorSyntax = ctorSyntax.WithInitializer(initializer);
         }
 
-        var statementSyntax = StatementVisitor.VisitStatements(context, statements);
+        var statementSyntax = StatementVisitor.VisitStatements(context, remainingStatements);
 
         ctorSyntax = ctorSyntax.AddBodyStatements(statementSyntax.ToArray());
 

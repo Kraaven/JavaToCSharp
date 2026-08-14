@@ -18,15 +18,7 @@ public class InstanceOfExpressionVisitor : ExpressionVisitor<InstanceOfExpr>
 
         if (expr.getPattern().isPresent() && expr.getPattern().get() is PatternExpr pattern)
         {
-            var typeName = TypeHelper.ConvertType(pattern.getType().toString());
-            typeName = TypeHelper.ReplaceWildcardsWithTypeParameters(typeName, context.TypeParameterNames);
-
-            return SyntaxFactory.IsPatternExpression(
-                exprSyntax,
-                SyntaxFactory.DeclarationPattern(
-                    SyntaxFactory.ParseTypeName(typeName),
-                    SyntaxFactory.SingleVariableDesignation(
-                        SyntaxFactory.Identifier(TypeHelper.EscapeIdentifier(pattern.getNameAsString())))));
+            return PatternConversion.PatternToIsCondition(context, exprSyntax, pattern);
         }
 
         var type = TypeHelper.ConvertTypeOf(expr);

@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using System.Text.RegularExpressions;
 using com.github.javaparser;
 using com.github.javaparser.ast;
 using com.github.javaparser.ast.body;
@@ -10,8 +11,27 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace JavaToCSharp;
 
-public static class JavaToCSharpConverter
+public static partial class JavaToCSharpConverter
 {
+    /// <summary>
+    /// Rewrites invalid primitive method type witnesses (e.g. <c>.&lt;boolean&gt;</c>) to boxed forms
+    /// so JavaParser can accept them.
+    /// </summary>
+    [GeneratedRegex(@"\.<\s*(boolean|byte|short|int|long|char|float|double)\s*>", RegexOptions.CultureInvariant)]
+    private static partial Regex PrimitiveTypeWitnessRegex();
+
+    private static readonly Dictionary<string, string> PrimitiveToBoxed = new(StringComparer.Ordinal)
+    {
+        ["boolean"] = "Boolean",
+        ["byte"] = "Byte",
+        ["short"] = "Short",
+        ["int"] = "Integer",
+        ["long"] = "Long",
+        ["char"] = "Character",
+        ["float"] = "Float",
+        ["double"] = "Double",
+    };
+
     public static string? ConvertText(string? javaText, JavaConversionOptions? options = null)
     {
         options ??= new JavaConversionOptions();
@@ -20,7 +40,9 @@ public static class JavaToCSharpConverter
 
         var context = new ConversionContext(options);
 
-        var textBytes = Encoding.UTF8.GetBytes(javaText ?? string.Empty);
+        javaText = RewritePrimitiveTypeWitnesses(javaText ?? string.Empty);
+
+        var textBytes = Encoding.UTF8.GetBytes(javaText);
 
         using var memoryStream = new MemoryStream(textBytes);
         using var wrapper = new InputStreamWrapper(memoryStream);
@@ -28,7 +50,7 @@ public static class JavaToCSharpConverter
         options.ConversionStateChanged(ConversionState.ParsingJavaAst);
 
         var parser = new JavaParser();
-        parser.getParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17);
+        parser.getParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_25);
 
         var parsed = parser.parse(wrapper);
 
@@ -152,5 +174,16 @@ public static class JavaToCSharpConverter
         options.ConversionStateChanged(ConversionState.Done);
 
         return tree.GetText().ToString();
+    }
+
+    internal static string RewritePrimitiveTypeWitnesses(string javaText)
+    {
+        return PrimitiveTypeWitnessRegex().Replace(javaText, static match =>
+        {
+            string primitive = match.Groups[1].Value;
+            return PrimitiveToBoxed.TryGetValue(primitive, out var boxed)
+                ? ".<" + boxed + ">"
+                : match.Value;
+        });
     }
 }

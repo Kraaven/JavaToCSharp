@@ -1,6 +1,6 @@
 <Solution>
   <Folder Name="/Lib/">
-    <File Path="Lib/javaparser-core-3.25.4.jar" />
+    <File Path="Lib/javaparser-core-3.28.2.jar" />
   </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />

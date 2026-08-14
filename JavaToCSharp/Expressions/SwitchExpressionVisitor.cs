@@ -14,6 +14,7 @@ public class SwitchExpressionVisitor : ExpressionVisitor<SwitchExpr>
         Expression label,
         out ExpressionSyntax enumConstant)
     {
+        // ! out param only read when method returns true
         enumConstant = null!;
 
         if (label is NameExpr nameExpr

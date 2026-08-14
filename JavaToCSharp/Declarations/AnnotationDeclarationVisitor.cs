@@ -19,9 +19,11 @@ public class AnnotationDeclarationVisitor : BodyDeclarationVisitor<AnnotationDec
         return null;
     }
 
-    public override MemberDeclarationSyntax VisitForInterface(ConversionContext context, InterfaceDeclarationSyntax interfaceSyntax,
+    public override MemberDeclarationSyntax? VisitForInterface(ConversionContext context, InterfaceDeclarationSyntax interfaceSyntax,
         AnnotationDeclaration declaration)
     {
-        throw new NotImplementedException();
+        context.Options.Warning("Declaring an annotation inside an interface NotImplemented.",
+                                declaration.getBegin().FromRequiredOptional<Position>().line);
+        return null;
     }
 }

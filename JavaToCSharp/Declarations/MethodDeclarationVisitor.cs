@@ -60,7 +60,7 @@ public class MethodDeclarationVisitor : BodyDeclarationVisitor<MethodDeclaration
                     attributeLists: [],
                     modifiers: SyntaxFactory.TokenList(),
                     type: SyntaxFactory.ParseTypeName(TypeHelper.ConvertTypeOf(i)),
-                    identifier: SyntaxFactory.ParseToken(TypeHelper.EscapeIdentifier(i.getNameAsString())),
+                    identifier: SyntaxFactory.Identifier(TypeHelper.EscapeIdentifier(i.getNameAsString())),
                     @default: null))
                 .ToArray();
 
@@ -179,7 +179,7 @@ public class MethodDeclarationVisitor : BodyDeclarationVisitor<MethodDeclaration
                     attributeLists: [],
                     modifiers: modifiers,
                     type: TypeHelper.ConvertTypeSyntax(type, arrayLevel),
-                    identifier: SyntaxFactory.ParseToken(identifier),
+                    identifier: SyntaxFactory.Identifier(identifier),
                     @default: null);
 
                 paramSyntaxes.Add(paramSyntax);

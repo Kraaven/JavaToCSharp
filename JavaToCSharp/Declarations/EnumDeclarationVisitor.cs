@@ -141,9 +141,10 @@ public class EnumDeclarationVisitor : BodyDeclarationVisitor<EnumDeclaration>
                 {
                     var fieldSyntax = BodyDeclarationVisitor.VisitBodyDeclarationForClass(
                         context, classSyntax, fieldDecl, [], []);
-                    if (fieldSyntax != null)
+                    var fieldWithComments = fieldSyntax?.WithJavaComments(context, fieldDecl);
+                    if (fieldWithComments is not null)
                     {
-                        convertedFields.Add(fieldSyntax.WithJavaComments(context, fieldDecl)!);
+                        convertedFields.Add(fieldWithComments);
                     }
 
                     break;
@@ -152,9 +153,10 @@ public class EnumDeclarationVisitor : BodyDeclarationVisitor<EnumDeclaration>
                 case ConstructorDeclaration ctorDecl:
                 {
                     var ctorSyntax = ConvertEnumConstructor(context, classSyntax, ctorDecl);
-                    if (ctorSyntax != null)
+                    var ctorWithComments = ctorSyntax?.WithJavaComments(context, ctorDecl);
+                    if (ctorWithComments is not null)
                     {
-                        convertedConstructors.Add(ctorSyntax.WithJavaComments(context, ctorDecl)!);
+                        convertedConstructors.Add(ctorWithComments);
                     }
 
                     break;
@@ -164,9 +166,10 @@ public class EnumDeclarationVisitor : BodyDeclarationVisitor<EnumDeclaration>
                 {
                     var methodSyntax = BodyDeclarationVisitor.VisitBodyDeclarationForClass(
                         context, classSyntax, methodDecl, [], []);
-                    if (methodSyntax != null)
+                    var methodWithComments = methodSyntax?.WithJavaComments(context, methodDecl);
+                    if (methodWithComments is not null)
                     {
-                        convertedMethods.Add(methodSyntax.WithJavaComments(context, methodDecl)!);
+                        convertedMethods.Add(methodWithComments);
                     }
 
                     break;
@@ -204,9 +207,10 @@ public class EnumDeclarationVisitor : BodyDeclarationVisitor<EnumDeclaration>
                 {
                     var syntax = BodyDeclarationVisitor.VisitBodyDeclarationForClass(
                         context, classSyntax, member, [], []);
-                    if (syntax != null)
+                    var withComments = syntax?.WithJavaComments(context, member);
+                    if (withComments is not null)
                     {
-                        convertedMethods.Add(syntax.WithJavaComments(context, member)!);
+                        convertedMethods.Add(withComments);
                     }
 
                     break;
@@ -264,7 +268,8 @@ public class EnumDeclarationVisitor : BodyDeclarationVisitor<EnumDeclaration>
             classSyntax = classSyntax.AddMembers(nested);
         }
 
-        return WithEnumConversionComment(classSyntax.WithJavaComments(context, enumDecl)!, name);
+        return WithEnumConversionComment(
+            classSyntax.WithJavaComments(context, enumDecl) ?? classSyntax, name);
     }
 
     private static ClassDeclarationSyntax WithEnumConversionComment(ClassDeclarationSyntax classSyntax, string enumName)
@@ -329,15 +334,37 @@ public class EnumDeclarationVisitor : BodyDeclarationVisitor<EnumDeclaration>
 
         ctorSyntax = ctorSyntax.AddParameterListParameters(paramSyntaxes.ToArray());
 
-        var bodyStatements = new List<StatementSyntax>
-        {
-            CreateSimpleAssignment("_name", "name"),
-            CreateSimpleAssignment("_ordinal", "ordinal")
-        };
-
         var block = ctorDecl.getBody();
         var statements = block.getStatements().ToList<Statement>() ?? [];
-        bodyStatements.AddRange(StatementVisitor.VisitStatements(context, statements));
+
+        // Enum ctors always take synthetic name/ordinal first; pass them through this()/base().
+        var prependArgs = new List<ArgumentSyntax>
+        {
+            SyntaxFactory.Argument(SyntaxFactory.IdentifierName("name")),
+            SyntaxFactory.Argument(SyntaxFactory.IdentifierName("ordinal"))
+        };
+
+        var (initializer, remainingStatements) = ConstructorConversion.ExtractInitializer(
+            context, statements, prependArgs);
+
+        bool chainsToThis = initializer is not null
+            && initializer.ThisOrBaseKeyword.IsKind(SyntaxKind.ThisKeyword);
+
+        if (initializer is not null)
+        {
+            ctorSyntax = ctorSyntax.WithInitializer(initializer);
+        }
+
+        var bodyStatements = new List<StatementSyntax>();
+
+        // Chained this(...) already assigns name/ordinal in the target constructor.
+        if (!chainsToThis)
+        {
+            bodyStatements.Add(CreateSimpleAssignment("_name", "name"));
+            bodyStatements.Add(CreateSimpleAssignment("_ordinal", "ordinal"));
+        }
+
+        bodyStatements.AddRange(StatementVisitor.VisitStatements(context, remainingStatements));
 
         return ctorSyntax.WithBody(SyntaxFactory.Block(bodyStatements));
     }
@@ -632,7 +659,11 @@ public class EnumDeclarationVisitor : BodyDeclarationVisitor<EnumDeclaration>
                                 methodSyntax.Modifiers.Where(m => !m.IsKind(SyntaxKind.VirtualKeyword))));
                     }
 
-                    nested = nested.AddMembers(syntax.WithJavaComments(context, bodyMember)!);
+                    var bodyWithComments = syntax.WithJavaComments(context, bodyMember);
+                    if (bodyWithComments is not null)
+                    {
+                        nested = nested.AddMembers(bodyWithComments);
+                    }
                 }
             }
         }

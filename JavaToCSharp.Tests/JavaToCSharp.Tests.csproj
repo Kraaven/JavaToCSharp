@@ -7,6 +7,7 @@
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsNotAsErrors>NX0001;NX0002</WarningsNotAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,6 +22,8 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="IKVM" Version="8.15.0" />
+    <PackageReference Include="YamlDotNet" Version="16.3.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -28,7 +31,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <IkvmReference Include="../Lib/javaparser-core-3.25.4.jar" />
+    <IkvmReference Include="../Lib/javaparser-core-3.28.2.jar" />
   </ItemGroup>
 
   <ItemGroup>

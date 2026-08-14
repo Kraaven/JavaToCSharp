@@ -227,6 +227,66 @@ public class T {
     }
 
     [Fact]
+    public void YieldInsideIfElseInSwitchExpression_ReturnsFromBranches()
+    {
+        const string java = """
+public class T {
+    boolean m(int x, boolean missing) {
+        return switch (x) {
+            case 1 -> {
+                if (missing) {
+                    yield false;
+                } else {
+                    yield true;
+                }
+            }
+            default -> false;
+        };
+    }
+}
+""";
+
+        var parsed = Convert(java);
+        Assert.Contains("if (x == 1)", parsed);
+        Assert.Contains("if (missing)", parsed);
+        Assert.Contains("return false", parsed);
+        Assert.Contains("return true", parsed);
+        Assert.DoesNotContain("yield", parsed);
+    }
+
+    [Fact]
+    public void YieldInsideNestedClassicSwitch_ReturnsFromBranches()
+    {
+        const string java = """
+public enum Rot { A, B }
+public class T {
+    Rot m(Rot outer, Rot inner) {
+        return switch (outer) {
+            case A -> {
+                switch (inner) {
+                    case A:
+                        yield B;
+                    case B:
+                        yield A;
+                    default:
+                        throw new IllegalStateException();
+                }
+            }
+            default -> outer;
+        };
+    }
+}
+""";
+
+        var parsed = Convert(java);
+        Assert.Contains("if (outer == Rot.A)", parsed);
+        Assert.Contains("if (inner == Rot.A)", parsed);
+        Assert.Contains("return B", parsed);
+        Assert.Contains("return A", parsed);
+        Assert.DoesNotContain("yield", parsed);
+    }
+
+    [Fact]
     public void NullCase_BecomesNullCheck()
     {
         const string java = """

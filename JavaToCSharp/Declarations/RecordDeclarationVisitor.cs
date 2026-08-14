@@ -191,9 +191,10 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
                         context, classSyntax, fieldDecl, [], implements);
                     RestoreBackingFields(context, savedBackingFields);
 
-                    if (fieldSyntax != null)
+                    var fieldWithComments = fieldSyntax?.WithJavaComments(context, fieldDecl);
+                    if (fieldWithComments is not null)
                     {
-                        staticAndOtherFields.Add(fieldSyntax.WithJavaComments(context, fieldDecl)!);
+                        staticAndOtherFields.Add(fieldWithComments);
                     }
 
                     break;
@@ -207,9 +208,10 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
                         context, classSyntax, ctorDecl, [], implements) as ConstructorDeclarationSyntax;
                     RestoreBackingFields(context, savedBackingFields);
 
-                    if (ctorSyntax != null)
+                    var ctorWithComments = ctorSyntax?.WithJavaComments(context, ctorDecl);
+                    if (ctorWithComments is not null)
                     {
-                        convertedConstructors.Add(ctorSyntax.WithJavaComments(context, ctorDecl)!);
+                        convertedConstructors.Add(ctorWithComments);
                     }
 
                     break;
@@ -229,9 +231,10 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
 
                     var methodSyntax = BodyDeclarationVisitor.VisitBodyDeclarationForClass(
                         context, classSyntax, methodDecl, [], implements);
-                    if (methodSyntax != null)
+                    var methodWithComments = methodSyntax?.WithJavaComments(context, methodDecl);
+                    if (methodWithComments is not null)
                     {
-                        convertedMethods.Add(methodSyntax.WithJavaComments(context, methodDecl)!);
+                        convertedMethods.Add(methodWithComments);
                     }
 
                     break;
@@ -269,9 +272,10 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
                 {
                     var syntax = BodyDeclarationVisitor.VisitBodyDeclarationForClass(
                         context, classSyntax, member, [], implements);
-                    if (syntax != null)
+                    var withComments = syntax?.WithJavaComments(context, member);
+                    if (withComments is not null)
                     {
-                        convertedMethods.Add(syntax.WithJavaComments(context, member)!);
+                        convertedMethods.Add(withComments);
                     }
 
                     break;
@@ -324,6 +328,11 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
             {
                 classSyntax = classSyntax.AddMembers(CreateDefaultAccessor(component));
             }
+        }
+
+        if (components.Count > 0)
+        {
+            classSyntax = classSyntax.AddMembers(CreateDeconstructMethod(components));
         }
 
         if (!hasEquals)
@@ -411,6 +420,42 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
                         SyntaxFactory.ThisExpression(),
                         SyntaxFactory.IdentifierName(storageName))))
             .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+    }
+
+    private static MethodDeclarationSyntax CreateDeconstructMethod(IReadOnlyList<Parameter> components)
+    {
+        var parameters = new List<ParameterSyntax>();
+        var body = new List<StatementSyntax>();
+
+        foreach (var component in components)
+        {
+            string componentName = component.getNameAsString();
+            string paramName = TypeHelper.EscapeIdentifier(componentName);
+            string storageName = TypeHelper.EscapeIdentifier(GetStorageName(componentName));
+            string typeName = TypeHelper.ConvertTypeOf(component);
+
+            parameters.Add(
+                SyntaxFactory.Parameter(SyntaxFactory.Identifier(paramName))
+                    .WithType(SyntaxFactory.ParseTypeName(typeName))
+                    .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.OutKeyword))));
+
+            body.Add(
+                SyntaxFactory.ExpressionStatement(
+                    SyntaxFactory.AssignmentExpression(
+                        SyntaxKind.SimpleAssignmentExpression,
+                        SyntaxFactory.IdentifierName(paramName),
+                        SyntaxFactory.MemberAccessExpression(
+                            SyntaxKind.SimpleMemberAccessExpression,
+                            SyntaxFactory.ThisExpression(),
+                            SyntaxFactory.IdentifierName(storageName)))));
+        }
+
+        return SyntaxFactory.MethodDeclaration(
+                SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword)),
+                "Deconstruct")
+            .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword))
+            .AddParameterListParameters(parameters.ToArray())
+            .WithBody(SyntaxFactory.Block(body));
     }
 
     private static ConstructorDeclarationSyntax CreateCanonicalConstructor(
