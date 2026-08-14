@@ -21,10 +21,9 @@ public class CommentTests(ITestOutputHelper testOutputHelper)
                                 """;
         var options = new JavaConversionOptions
         {
-            StartInterfaceNamesWithI = true,
         };
 
-        options.Usings.Clear();
+        options.ClearUsings();
 
         var parsed = JavaToCSharpConverter.ConvertText(javaCode, options) ?? "";
 
@@ -70,10 +69,9 @@ public class CommentTests(ITestOutputHelper testOutputHelper)
                                 """;
         var options = new JavaConversionOptions
         {
-            StartInterfaceNamesWithI = true,
         };
 
-        options.Usings.Clear();
+        options.ClearUsings();
 
         var parsed = JavaToCSharpConverter.ConvertText(javaCode, options) ?? "";
 

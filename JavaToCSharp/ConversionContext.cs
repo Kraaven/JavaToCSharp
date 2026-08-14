@@ -2,9 +2,20 @@
 
 namespace JavaToCSharp;
 
-public class ConversionContext(JavaConversionOptions options)
+public class ConversionContext(
+    JavaConversionOptions options,
+    Action<ConversionState>? stateChanged = null,
+    Action<ConversionWarningEventArgs>? warning = null)
 {
     private int _tempCounter;
+
+    private readonly Action<ConversionState>? _stateChanged = stateChanged;
+    private readonly Action<ConversionWarningEventArgs>? _warning = warning;
+
+    public void NotifyStateChanged(ConversionState state) => _stateChanged?.Invoke(state);
+
+    public void Warning(string message, int javaLineNumber) =>
+        _warning?.Invoke(new ConversionWarningEventArgs(message, javaLineNumber));
 
     public Queue<ClassDeclarationSyntax> PendingAnonymousTypes { get; } = new();
 

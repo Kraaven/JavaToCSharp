@@ -19,8 +19,8 @@ public class InitializerDeclarationVisitor : BodyDeclarationVisitor<InitializerD
         if (!declaration.isStatic())
         {
             //throw new NotImplementedException("Support for non-static initializers is not understood or implemented");
-            context.Options.Warning("Support for non-static initializers is not understood or implemented",
-                                    declaration.getBegin().FromRequiredOptional<Position>().line);
+            context.Warning("Support for non-static initializers is not understood or implemented",
+                            declaration.getBegin().FromRequiredOptional<Position>().line);
         }
 
         var block = declaration.getBody();

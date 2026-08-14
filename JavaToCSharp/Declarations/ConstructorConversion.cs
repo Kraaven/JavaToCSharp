@@ -33,7 +33,7 @@ internal static class ConstructorConversion
 
         if (invokeIndex > 0)
         {
-            context.Options.Warning(
+            context.Warning(
                 "Statements before this()/super() were moved after the C# constructor initializer.",
                 ctorInvStmt.getBegin().FromOptional<com.github.javaparser.Position>()?.line ?? -1);
         }

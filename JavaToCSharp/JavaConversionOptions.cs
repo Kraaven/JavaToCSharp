@@ -2,17 +2,19 @@
 
 namespace JavaToCSharp;
 
+/// <summary>
+/// Read-only configuration for a conversion. Instances are safe to share across
+/// concurrent <see cref="JavaToCSharpConverter.ConvertText"/> calls; conversion never mutates
+/// this object. Configure it before converting and treat it as immutable afterwards.
+/// </summary>
 public class JavaConversionOptions
 {
-    public event EventHandler<ConversionWarningEventArgs>? WarningEncountered;
+    private readonly List<Replacement> _packageReplacements = [];
+    private readonly List<string> _usings = [];
 
-    public event EventHandler<ConversionStateChangedEventArgs>? StateChanged;
+    public IReadOnlyList<Replacement> PackageReplacements => _packageReplacements;
 
-    public IList<Replacement> PackageReplacements { get; } = new List<Replacement>();
-
-    public IList<string> Usings { get; } = new List<string>();
-
-    public IList<string> StaticUsingEnumNames { get; } = new List<string>();
+    public IReadOnlyList<string> Usings => _usings;
 
     public bool IncludeSubdirectories { get; set; } = true;
 
@@ -21,8 +23,6 @@ public class JavaConversionOptions
     public bool IncludeNamespace { get; set; } = true;
 
     public bool UseDebugAssertForAsserts { get; set; }
-
-    public bool StartInterfaceNamesWithI { get; set; }
 
     /// <summary>
     /// Unrecognized code is translated into comments
@@ -37,47 +37,33 @@ public class JavaConversionOptions
 
     public SyntaxMapping SyntaxMappings { get; set; } = new SyntaxMapping();
 
-    public ConversionState ConversionState { get; set; }
-
     public JavaConversionOptions AddPackageReplacement(string pattern, string replacement, RegexOptions options = RegexOptions.None)
     {
-        PackageReplacements.Add(new Replacement(pattern, replacement, options));
+        _packageReplacements.Add(new Replacement(pattern, replacement, options));
 
         return this;
     }
 
     public JavaConversionOptions ClearUsings()
     {
-        Usings.Clear();
+        _usings.Clear();
 
         return this;
     }
 
     public JavaConversionOptions AddUsing(string ns)
     {
-        Usings.Add(ns);
+        _usings.Add(ns);
 
         return this;
     }
 
     public JavaConversionOptions SetUsings(IEnumerable<string> usings)
     {
-        Usings.Clear();
+        _usings.Clear();
 
-        foreach (string u in usings)
-        {
-            Usings.Add(u);
-        }
+        _usings.AddRange(usings);
 
         return this;
-    }
-
-    internal void Warning(string message, int javaLineNumber) => WarningEncountered?.Invoke(this, new ConversionWarningEventArgs(message, javaLineNumber));
-
-    internal void ConversionStateChanged(ConversionState newState)
-    {
-        ConversionState = newState;
-
-        StateChanged?.Invoke(this, new ConversionStateChangedEventArgs(newState));
     }
 }

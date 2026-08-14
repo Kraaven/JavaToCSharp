@@ -29,15 +29,7 @@ public class ClassOrInterfaceDeclarationVisitor : BodyDeclarationVisitor<ClassOr
     public static InterfaceDeclarationSyntax VisitInterfaceDeclaration(ConversionContext context,
         ClassOrInterfaceDeclaration interfaceDecl, bool isNested = false)
     {
-        var originalTypeName = interfaceDecl.getName();
-        var newTypeName = context.Options.StartInterfaceNamesWithI
-            ? $"I{originalTypeName.getIdentifier()}"
-            : originalTypeName.getIdentifier();
-
-        if (context.Options.StartInterfaceNamesWithI)
-        {
-            TypeHelper.AddOrUpdateTypeNameConversions(originalTypeName.getIdentifier(), newTypeName);
-        }
+        var newTypeName = interfaceDecl.getName().getIdentifier();
 
         if (!isNested)
         {

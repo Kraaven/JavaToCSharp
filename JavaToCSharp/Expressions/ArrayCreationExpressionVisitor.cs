@@ -18,7 +18,7 @@ public class ArrayCreationExpressionVisitor : ExpressionVisitor<ArrayCreationExp
 
         if (rankDimensions is  { Count: > 1 })
         {
-            context.Options.Warning("Multi-dimensional arrays will likely have conversion issues. Review the generated code carefully.",
+            context.Warning("Multi-dimensional arrays will likely have conversion issues. Review the generated code carefully.",
                 expr.getBegin().FromRequiredOptional<Position>().line);
         }
 

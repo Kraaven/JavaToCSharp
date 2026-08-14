@@ -32,13 +32,17 @@ public static partial class JavaToCSharpConverter
         ["double"] = "Double",
     };
 
-    public static string? ConvertText(string? javaText, JavaConversionOptions? options = null)
+    public static string? ConvertText(
+        string? javaText,
+        JavaConversionOptions? options = null,
+        Action<ConversionState>? stateChanged = null,
+        Action<ConversionWarningEventArgs>? warning = null)
     {
         options ??= new JavaConversionOptions();
 
-        options.ConversionStateChanged(ConversionState.Starting);
+        var context = new ConversionContext(options, stateChanged, warning);
 
-        var context = new ConversionContext(options);
+        context.NotifyStateChanged(ConversionState.Starting);
 
         javaText = RewritePrimitiveTypeWitnesses(javaText ?? string.Empty);
 
@@ -47,7 +51,7 @@ public static partial class JavaToCSharpConverter
         using var memoryStream = new MemoryStream(textBytes);
         using var wrapper = new InputStreamWrapper(memoryStream);
 
-        options.ConversionStateChanged(ConversionState.ParsingJavaAst);
+        context.NotifyStateChanged(ConversionState.ParsingJavaAst);
 
         var parser = new JavaParser();
         parser.getParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_25);
@@ -69,7 +73,7 @@ public static partial class JavaToCSharpConverter
 
         var result = parsed.getResult().FromRequiredOptional<CompilationUnit>();
 
-        options.ConversionStateChanged(ConversionState.BuildingCSharpAst);
+        context.NotifyStateChanged(ConversionState.BuildingCSharpAst);
 
         var types = result.getTypes().ToList<TypeDeclaration>() ?? [];
         var imports = result.getImports()?.ToList<ImportDeclaration>() ?? [];
@@ -154,7 +158,7 @@ public static partial class JavaToCSharpConverter
 
         var root = SyntaxFactory.CompilationUnit(
                 externs: [],
-                usings: SyntaxFactory.List(UsingsHelper.GetUsings(context, imports, options, namespaceNameSyntax)),
+                usings: SyntaxFactory.List(UsingsHelper.GetUsings(context, imports, options)),
                 attributeLists: [],
                 members: SyntaxFactory.List(rootMembers)
             );
@@ -171,7 +175,7 @@ public static partial class JavaToCSharpConverter
 
         var tree = SyntaxFactory.SyntaxTree(sanitizedRoot);
 
-        options.ConversionStateChanged(ConversionState.Done);
+        context.NotifyStateChanged(ConversionState.Done);
 
         return tree.GetText().ToString();
     }

@@ -42,12 +42,6 @@ public class Program
         DefaultValueFactory = _ => false,
     };
 
-    private static readonly Option<bool> _startInterfaceNamesWithIOption = new("--start-interface-names-with-i")
-    {
-        Description = "Prefix interface names with the letter I",
-        DefaultValueFactory = _ => true,
-    };
-
     private static readonly Option<bool> _commentUnrecognizedCodeOption = new("--comment-unrecognized-code")
     {
         Description = "Include unrecognized code in output as commented-out code",
@@ -105,7 +99,6 @@ public class Program
         rootCommand.Options.Add(_includeNamespaceOption);
         rootCommand.Options.Add(_includeCommentsOption);
         rootCommand.Options.Add(_useDebugAssertOption);
-        rootCommand.Options.Add(_startInterfaceNamesWithIOption);
         rootCommand.Options.Add(_commentUnrecognizedCodeOption);
         rootCommand.Options.Add(_systemOutToConsoleOption);
         rootCommand.Options.Add(_fileScopedNamespacesOption);
@@ -160,7 +153,6 @@ public class Program
             IncludeComments = context.GetValue(_includeCommentsOption),
             IncludeNamespace = context.GetValue(_includeNamespaceOption),
             ConvertSystemOutToConsole = context.GetValue(_systemOutToConsoleOption),
-            StartInterfaceNamesWithI = context.GetValue(_startInterfaceNamesWithIOption),
             UseDebugAssertForAsserts = context.GetValue(_useDebugAssertOption),
             UseUnrecognizedCodeToComment = context.GetValue(_commentUnrecognizedCodeOption),
             UseFileScopedNamespaces = context.GetValue(_fileScopedNamespacesOption),
@@ -233,32 +225,29 @@ public class Program
 
     private static void ConvertToCSharpDir(DirectoryInfo inputDirectory, DirectoryInfo outputDirectory, JavaConversionOptions options)
     {
-        if (inputDirectory.Exists)
-        {
-            var searchOption = options.IncludeSubdirectories ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-            foreach (var f in inputDirectory.GetFiles("*.java", searchOption))
-            {
-                string? directoryName = f.DirectoryName;
-                if (string.IsNullOrWhiteSpace(directoryName))
-                {
-                    continue;
-                }
-
-                if (!outputDirectory.Exists)
-                {
-                    outputDirectory.Create();
-                }
-
-                ConvertToCSharpFile(f,
-                    new FileInfo(Path.Combine(outputDirectory.FullName, Path.ChangeExtension(f.Name, ".cs"))),
-                    options,
-                    false);
-            }
-        }
-        else
+        if (!inputDirectory.Exists)
         {
             _logger.LogError("Java input folder {path} doesn't exist!", inputDirectory);
+            return;
         }
+
+        var searchOption = options.IncludeSubdirectories ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+        var files = inputDirectory.GetFiles("*.java", searchOption)
+            .Where(static f => !string.IsNullOrWhiteSpace(f.DirectoryName))
+            .ToArray();
+
+        if (!outputDirectory.Exists)
+        {
+            outputDirectory.Create();
+        }
+
+        Parallel.ForEach(files, f =>
+        {
+            ConvertToCSharpFile(f,
+                new FileInfo(Path.Combine(outputDirectory.FullName, Path.ChangeExtension(f.Name, ".cs"))),
+                options,
+                false);
+        });
     }
 
     private static void ConvertToCSharpFile(FileSystemInfo inputFile, FileSystemInfo? outputFile, JavaConversionOptions options, bool overwrite = true)
@@ -273,20 +262,31 @@ public class Program
             {
                 string javaText = File.ReadAllText(inputFile.FullName);
 
-                options.WarningEncountered += (_, eventArgs) =>
-                {
-                    if (outputFile != null)
+                var warnings = new List<string>();
+
+                string? parsed = JavaToCSharpConverter.ConvertText(
+                    javaText,
+                    options,
+                    warning: eventArgs =>
                     {
-                        _logger.LogWarning("Line {JavaLineNumber}: {Message}", eventArgs.JavaLineNumber,
-                            eventArgs.Message);
-                    }
+                        if (outputFile != null)
+                        {
+                            _logger.LogWarning("Line {JavaLineNumber}: {Message}", eventArgs.JavaLineNumber,
+                                eventArgs.Message);
+                            warnings.Add(eventArgs.Message);
+                        }
+                        else
+                        {
+                            Console.Out.WriteLine(eventArgs.Message);
+                        }
+                    });
 
-                    OutputFileOrPrint(outputFile != null ? Path.ChangeExtension(outputFile.FullName, ".warning") : null,
-                        eventArgs.Message + Environment.NewLine);
-                };
-
-                string? parsed = JavaToCSharpConverter.ConvertText(javaText, options);
                 OutputFileOrPrint(outputFile?.FullName, parsed ?? string.Empty);
+
+                if (warnings.Count > 0 && outputFile != null)
+                {
+                    File.WriteAllLines(Path.ChangeExtension(outputFile.FullName, ".warning"), warnings);
+                }
 
                 if (outputFile != null)
                 {

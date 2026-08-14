@@ -3,7 +3,7 @@ namespace JavaToCSharp.Tests;
 public class ConvertInterfaceTests
 {
     [Fact]
-    public void Verify_Method_Param_Types_Use_New_Interface_Name_Types()
+    public void Verify_Method_Param_Types_Use_Interface_Name_Types()
     {
         const string javaCode = """
                                 import com.github.javaparser.resolution.Context;
@@ -24,17 +24,14 @@ public class ConvertInterfaceTests
                                 }
 
                                 """;
-        var options = new JavaConversionOptions { StartInterfaceNamesWithI = true };
-        options.WarningEncountered += (_, eventArgs)
-            => Console.WriteLine("Line {0}: {1}", eventArgs.JavaLineNumber, eventArgs.Message);
-        var parsed = JavaToCSharpConverter.ConvertText(javaCode, options) ?? "";
+        var parsed = JavaToCSharpConverter.ConvertText(javaCode) ?? "";
 
         const string expectedCSharpCode = """
                                           using Com.Github.Javaparser.Resolution;
                                           
                                           namespace MyApp
                                           {
-                                              public interface IResolvedType
+                                              public interface ResolvedType
                                               {
                                                   bool IsArray()
                                                   {
@@ -42,16 +39,16 @@ public class ConvertInterfaceTests
                                                   }
                                               }
                                           
-                                              public class InferenceVariableType : IResolvedType
+                                              public class InferenceVariableType : ResolvedType
                                               {
-                                                  public virtual void RegisterEquivalentType(IResolvedType type)
+                                                  public virtual void RegisterEquivalentType(ResolvedType type)
                                                   {
                                                   }
                                               }
                                           
-                                              public interface IResolvedValueDeclaration : ResolvedDeclaration
+                                              public interface ResolvedValueDeclaration : ResolvedDeclaration
                                               {
-                                                  IResolvedType GetType();
+                                                  ResolvedType GetType();
                                               }
                                           }
                                           """;
@@ -66,15 +63,12 @@ public class ConvertInterfaceTests
                                 public interface CharTermAttribute extends Attribute, CharSequence, Appendable {
                                 }
                                 """;
-        var options = new JavaConversionOptions { StartInterfaceNamesWithI = true };
-        options.WarningEncountered += (_, eventArgs)
-            => Console.WriteLine("Line {0}: {1}", eventArgs.JavaLineNumber, eventArgs.Message);
-        var parsed = JavaToCSharpConverter.ConvertText(javaCode, options) ?? "";
+        var parsed = JavaToCSharpConverter.ConvertText(javaCode) ?? "";
 
         const string expected = """
                                 namespace MyApp
                                 {
-                                    public interface ICharTermAttribute : Attribute, CharSequence, Appendable
+                                    public interface CharTermAttribute : Attribute, CharSequence, Appendable
                                     {
                                     }
                                 }

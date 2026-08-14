@@ -9,8 +9,7 @@ public static class UsingsHelper
 {
     public static IEnumerable<UsingDirectiveSyntax> GetUsings(ConversionContext context,
         IEnumerable<ImportDeclaration> imports,
-        JavaConversionOptions? options,
-        NameSyntax? namespaceNameSyntax)
+        JavaConversionOptions? options)
     {
         var usings = new List<UsingDirectiveSyntax>();
 
@@ -49,20 +48,6 @@ public static class UsingsHelper
             usings.AddRange(options.Usings
                 .Where(x => !string.IsNullOrWhiteSpace(x))
                 .Select(ns => SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(ns)).NormalizeWhitespace().WithTrailingNewLines()));
-        }
-
-        if (namespaceNameSyntax is not null)
-        {
-            foreach (var staticUsing in options?.StaticUsingEnumNames ?? [])
-            {
-                var usingSyntax = SyntaxFactory
-                    .UsingDirective(SyntaxFactory.ParseName($"{namespaceNameSyntax}.{staticUsing}"))
-                    .WithStaticKeyword(SyntaxFactory.Token(SyntaxKind.StaticKeyword))
-                    .NormalizeWhitespace()
-                    .WithTrailingNewLines();
-
-                usings.Add(usingSyntax);
-            }
         }
 
         usings = usings.Distinct(new UsingDirectiveSyntaxComparer()).ToList();

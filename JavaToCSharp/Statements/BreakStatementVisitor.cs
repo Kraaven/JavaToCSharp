@@ -10,7 +10,7 @@ public class BreakStatementVisitor : StatementVisitor<BreakStmt>
     public override StatementSyntax Visit(ConversionContext context, BreakStmt brk)
     {
         if (brk.getLabel().isPresent())
-            context.Options.Warning("Break with label detected, using plain break instead. Check for correctness.", brk.getBegin().FromRequiredOptional<Position>().line);
+            context.Warning("Break with label detected, using plain break instead. Check for correctness.", brk.getBegin().FromRequiredOptional<Position>().line);
 
         return SyntaxFactory.BreakStatement();
     }

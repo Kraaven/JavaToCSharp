@@ -57,8 +57,6 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty] private AvaloniaList<string> _folderOutputFiles = [];
 
-    private string _currentJavaFile = "";
-
     [ObservableProperty] private TextDocument _javaText = new();
 
     [ObservableProperty] private TextDocument _cSharpText = new();
@@ -81,9 +79,6 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private async Task Convert()
     {
-        CurrentOptions.Options.WarningEncountered += Options_WarningEncountered;
-        CurrentOptions.Options.StateChanged += Options_StateChanged;
-
         IsConvertEnabled = false;
         _usingFolderConvert = false;
 
@@ -93,7 +88,11 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             try
             {
-                string? csharp = JavaToCSharpConverter.ConvertText(text, CurrentOptions.Options);
+                string? csharp = JavaToCSharpConverter.ConvertText(
+                    text,
+                    CurrentOptions.Options,
+                    stateChanged: SetConversionState,
+                    warning: e => HandleWarning(e, file: null));
                 await DispatcherInvoke(() => CSharpText.Text = csharp ?? "");
             }
             catch (Exception ex)
@@ -102,13 +101,11 @@ public partial class MainWindowViewModel : ViewModelBase
                     ShowMessage($"There was an error converting the text to C#: {ex.GetBaseException().Message}",
                         "Conversion Error"));
 
-                ConversionStateLabel = "";
+                await DispatcherInvoke(() => ConversionStateLabel = "");
             }
             finally
             {
                 await DispatcherInvoke(() => IsConvertEnabled = true);
-                CurrentOptions.Options.WarningEncountered -= Options_WarningEncountered;
-                CurrentOptions.Options.StateChanged -= Options_StateChanged;
             }
         });
     }
@@ -164,12 +161,11 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        CurrentOptions.Options.WarningEncountered += Options_WarningEncountered;
-        CurrentOptions.Options.StateChanged += Options_StateChanged;
-
         IsConvertEnabled = false;
         _usingFolderConvert = true;
         FolderOutputFiles.Clear();
+
+        var files = FolderInputFiles.Where(static x => x.Directory is not null).ToList();
 
         await Task.Run(async () =>
         {
@@ -186,7 +182,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 string outDirFullName = outDir.FullName;
                 int subStartIndex = dir.FullName.Length;
 
-                foreach (var jFile in FolderInputFiles.Where(static x => x.Directory is not null))
+                await Parallel.ForEachAsync(files, async (jFile, cancellationToken) =>
                 {
                     // ! null checked above
                     string jPath = jFile.Directory!.FullName;
@@ -194,20 +190,21 @@ public partial class MainWindowViewModel : ViewModelBase
                     string jOutFileName = Path.GetFileNameWithoutExtension(jFile.Name) + ".cs";
                     string jOutFileFullName = Path.Combine(jOutPath, jOutFileName);
 
-                    _currentJavaFile = jFile.FullName;
+                    Directory.CreateDirectory(jOutPath);
 
-                    if (!Directory.Exists(jOutPath))
-                        Directory.CreateDirectory(jOutPath);
-
-                    string jText = await File.ReadAllTextAsync(_currentJavaFile);
+                    string jText = await File.ReadAllTextAsync(jFile.FullName, cancellationToken);
 
                     if (string.IsNullOrEmpty(jText))
-                        continue;
+                        return;
 
                     try
                     {
-                        string? csText = JavaToCSharpConverter.ConvertText(jText, CurrentOptions.Options);
-                        await File.WriteAllTextAsync(jOutFileFullName, csText);
+                        string? csText = JavaToCSharpConverter.ConvertText(
+                            jText,
+                            CurrentOptions.Options,
+                            stateChanged: SetConversionState,
+                            warning: e => HandleWarning(e, jFile.FullName));
+                        await File.WriteAllTextAsync(jOutFileFullName, csText, cancellationToken);
 
                         await DispatcherInvoke(() =>
                         {
@@ -222,7 +219,7 @@ public partial class MainWindowViewModel : ViewModelBase
                                 "Conversion Error");
                         });
                     }
-                }
+                });
             }
             catch (Exception ex)
             {
@@ -230,13 +227,11 @@ public partial class MainWindowViewModel : ViewModelBase
                     ShowMessage($"There was an error converting the text to C#: {ex.GetBaseException().Message}",
                         "Conversion Error"));
 
-                ConversionStateLabel = "";
+                await DispatcherInvoke(() => ConversionStateLabel = "");
             }
             finally
             {
                 await DispatcherInvoke(() => IsConvertEnabled = true);
-                CurrentOptions.Options.WarningEncountered -= Options_WarningEncountered;
-                CurrentOptions.Options.StateChanged -= Options_StateChanged;
             }
         });
     }
@@ -258,33 +253,36 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty] private bool _isMessageShown;
 
-    private void Options_StateChanged(object? sender, ConversionStateChangedEventArgs e)
+    private void SetConversionState(ConversionState state)
     {
-        ConversionStateLabel = e.NewState switch
+        _ = DispatcherInvoke(() =>
         {
-            ConversionState.Starting => "Starting...",
-            ConversionState.ParsingJavaAst => "Parsing Java code...",
-            ConversionState.BuildingCSharpAst => "Building C# AST...",
-            ConversionState.Done => "Done!",
-            _ => ConversionStateLabel
-        };
+            ConversionStateLabel = state switch
+            {
+                ConversionState.Starting => "Starting...",
+                ConversionState.ParsingJavaAst => "Parsing Java code...",
+                ConversionState.BuildingCSharpAst => "Building C# AST...",
+                ConversionState.Done => "Done!",
+                _ => ConversionStateLabel
+            };
+        });
     }
 
-    private async void Options_WarningEncountered(object? sender, ConversionWarningEventArgs e)
+    private void HandleWarning(ConversionWarningEventArgs e, string? file)
     {
         if (_usingFolderConvert)
         {
-            await DispatcherInvoke(() =>
+            _ = DispatcherInvoke(() =>
             {
                 CSharpText.Text = $"{CSharpText.Text}{Environment.NewLine}" +
                                   $"=================={Environment.NewLine}" +
-                                  $"[WARN] {_currentJavaFile}{e.JavaLineNumber}{Environment.NewLine}" +
+                                  $"[WARN] {file}{e.JavaLineNumber}{Environment.NewLine}" +
                                   $"\t\tMessage: {e.Message}{Environment.NewLine}";
             });
         }
         else
         {
-            ShowMessage($"Java Line {e.JavaLineNumber}: {e.Message}", "Warning Encountered");
+            _ = DispatcherInvoke(() => ShowMessage($"Java Line {e.JavaLineNumber}: {e.Message}", "Warning Encountered"));
         }
     }
 
@@ -357,9 +355,6 @@ public partial class MainWindowViewModel : ViewModelBase
         JavaText.Text = clipboardText;
 
         // Perform conversion
-        CurrentOptions.Options.WarningEncountered += Options_WarningEncountered;
-        CurrentOptions.Options.StateChanged += Options_StateChanged;
-
         IsConvertEnabled = false;
         _usingFolderConvert = false;
 
@@ -367,7 +362,11 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             try
             {
-                string? csharp = JavaToCSharpConverter.ConvertText(clipboardText, CurrentOptions.Options);
+                string? csharp = JavaToCSharpConverter.ConvertText(
+                    clipboardText,
+                    CurrentOptions.Options,
+                    stateChanged: SetConversionState,
+                    warning: e => HandleWarning(e, file: null));
                 await DispatcherInvoke(() => CSharpText.Text = csharp ?? "");
 
                 // Copy result to clipboard
@@ -383,13 +382,11 @@ public partial class MainWindowViewModel : ViewModelBase
                     ShowMessage($"There was an error converting the text to C#: {ex.GetBaseException().Message}",
                         "Conversion Error"));
 
-                ConversionStateLabel = "";
+                await DispatcherInvoke(() => ConversionStateLabel = "");
             }
             finally
             {
                 await DispatcherInvoke(() => IsConvertEnabled = true);
-                CurrentOptions.Options.WarningEncountered -= Options_WarningEncountered;
-                CurrentOptions.Options.StateChanged -= Options_StateChanged;
             }
         });
     }

@@ -7,13 +7,7 @@ namespace JavaToCSharp.Expressions;
 
 public class DoubleLiteralExpressionVisitor : ExpressionVisitor<DoubleLiteralExpr>
 {
-    private readonly CultureInfo _cultureInfo;
-
-    public DoubleLiteralExpressionVisitor()
-    {
-        _cultureInfo = (CultureInfo)CultureInfo.CurrentCulture.Clone();
-        _cultureInfo.NumberFormat.CurrencyDecimalSeparator = ".";
-    }
+    private static readonly CultureInfo _cultureInfo = CultureInfo.InvariantCulture;
 
     protected override ExpressionSyntax Visit(ConversionContext context, DoubleLiteralExpr expr)
     {

@@ -28,15 +28,16 @@ public class IntegrationTests(ITestOutputHelper testOutputHelper)
             IncludeComments = false,
         };
 
-        options.WarningEncountered += (_, eventArgs) =>
-        {
-            if (!allowWarnings)
+        var parsed = JavaToCSharpConverter.ConvertText(
+            File.ReadAllText(filePath),
+            options,
+            warning: eventArgs =>
             {
-                throw new InvalidOperationException($"Encountered a warning in conversion: {eventArgs.Message}");
-            }
-        };
-
-        var parsed = JavaToCSharpConverter.ConvertText(File.ReadAllText(filePath), options);
+                if (!allowWarnings)
+                {
+                    throw new InvalidOperationException($"Encountered a warning in conversion: {eventArgs.Message}");
+                }
+            });
 
         Assert.NotNull(parsed);
 
@@ -52,11 +53,11 @@ public class IntegrationTests(ITestOutputHelper testOutputHelper)
             IncludeComments = false,
         };
 
-        options.WarningEncountered += (_, eventArgs)
-            => throw new InvalidOperationException(
-                $"Encountered a warning in conversion when we expected a failure: {eventArgs.Message}");
-
-        Assert.ThrowsAny<Exception>(() => JavaToCSharpConverter.ConvertText(File.ReadAllText(filePath), options));
+        Assert.ThrowsAny<Exception>(() => JavaToCSharpConverter.ConvertText(
+            File.ReadAllText(filePath),
+            options,
+            warning: eventArgs => throw new InvalidOperationException(
+                $"Encountered a warning in conversion when we expected a failure: {eventArgs.Message}")));
     }
 
     [Theory]
@@ -82,12 +83,13 @@ public class IntegrationTests(ITestOutputHelper testOutputHelper)
 
         options.AddUsing("System");
 
-        options.WarningEncountered += (_, eventArgs)
-            => throw new InvalidOperationException($"Encountered a warning in conversion: {eventArgs.Message}");
-
         var javaText = File.ReadAllText(filePath);
 
-        var parsed = JavaToCSharpConverter.ConvertText(javaText, options);
+        var parsed = JavaToCSharpConverter.ConvertText(
+            javaText,
+            options,
+            warning: eventArgs
+                => throw new InvalidOperationException($"Encountered a warning in conversion: {eventArgs.Message}"));
 
         Assert.NotNull(parsed);
 

@@ -95,9 +95,6 @@ public class EnumDeclarationVisitor : BodyDeclarationVisitor<EnumDeclaration>
             context.EnumConstantsBySimpleName[constantName] = $"{name}.{constantName}";
         }
 
-        // Still emit static usings so constants are accessible unqualified from sibling files
-        context.Options.StaticUsingEnumNames.Add(name);
-
         TypeSyntax enumTypeSyntax = SyntaxFactory.ParseTypeName(name);
 
         // Static constant fields

@@ -48,7 +48,7 @@ public class TryStatementVisitor : StatementVisitor<TryStmt>
 
                 if (varDecl.getVariables().size() > 1)
                 {
-                    context.Options.Warning("Unexpected multiple variables in try-with-resources declaration",
+                    context.Warning("Unexpected multiple variables in try-with-resources declaration",
                         resource.getBegin().FromRequiredOptional<Position>().line);
                 }
 
@@ -70,7 +70,7 @@ public class TryStatementVisitor : StatementVisitor<TryStmt>
             }
             else
             {
-                context.Options.Warning("Unexpected try-with-resources resource",
+                context.Warning("Unexpected try-with-resources resource",
                     resource.getBegin().FromRequiredOptional<Position>().line);
             }
         }

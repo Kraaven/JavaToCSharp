@@ -47,11 +47,6 @@ public static class TypeHelper
         ["NoSuchFileException"] = "FileNotFoundException",
     };
 
-    public static void AddOrUpdateTypeNameConversions(string key, string value)
-    {
-        _typeNameConversions[key] = value;
-    }
-
     public static string ConvertTypeOf(Ast.nodeTypes.NodeWithType typedNode)
     {
         return ConvertType(typedNode.getType().toString());

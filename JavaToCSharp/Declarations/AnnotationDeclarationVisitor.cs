@@ -14,16 +14,16 @@ public class AnnotationDeclarationVisitor : BodyDeclarationVisitor<AnnotationDec
         IReadOnlyList<ClassOrInterfaceType> extends,
         IReadOnlyList<ClassOrInterfaceType> implements)
     {
-        context.Options.Warning("Declaring an annotation inside a class NotImplemented.",
-                                declaration.getBegin().FromRequiredOptional<Position>().line);
+        context.Warning("Declaring an annotation inside a class NotImplemented.",
+                        declaration.getBegin().FromRequiredOptional<Position>().line);
         return null;
     }
 
     public override MemberDeclarationSyntax? VisitForInterface(ConversionContext context, InterfaceDeclarationSyntax interfaceSyntax,
         AnnotationDeclaration declaration)
     {
-        context.Options.Warning("Declaring an annotation inside an interface NotImplemented.",
-                                declaration.getBegin().FromRequiredOptional<Position>().line);
+        context.Warning("Declaring an annotation inside an interface NotImplemented.",
+                        declaration.getBegin().FromRequiredOptional<Position>().line);
         return null;
     }
 }
