@@ -36,6 +36,16 @@ public class JavaConversionOptions
     public bool UseFileScopedNamespaces { get; set; }
 
     /// <summary>
+    /// When true (default), method, field and member names keep their original Java casing
+    /// and no Java-to-C# property transforms are applied (e.g. <c>size()</c> is not rewritten
+    /// to <c>Count</c>). This keeps individually converted files call-compatible with each
+    /// other across files. When false, method names are PascalCased and common Java calls
+    /// (<c>size()</c>, <c>get(i)</c>, <c>set(i, v)</c>, <c>length()</c>, <c>compare</c>)
+    /// are rewritten to C# properties/indexers.
+    /// </summary>
+    public bool PreserveJavaMethodNames { get; set; } = true;
+
+    /// <summary>
     /// When true, one log line is emitted per converted file to each enabled sink
     /// (<see cref="LogToConsole"/>, <see cref="LogToCallback"/>, <see cref="LogToFile"/>).
     /// False by default.

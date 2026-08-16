@@ -24,7 +24,8 @@ public class ConvertExpressionTests
     {
         ParseResult parseResult = new JavaParser().parseExpression(javaExpr);
         Expression parsedExpr = parseResult.getResult().FromRequiredOptional<Expression>();
-        var expr = ExpressionVisitor.VisitExpression(new ConversionContext(new JavaConversionOptions()), parsedExpr);
+        var expr = ExpressionVisitor.VisitExpression(
+            new ConversionContext(new JavaConversionOptions { PreserveJavaMethodNames = false }), parsedExpr);
         Assert.Equal(expectedCSharpExpr, expr?.ToString());
     }
 

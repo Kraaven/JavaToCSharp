@@ -133,6 +133,18 @@ namespace JavaToCSharpGui.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool PreserveJavaMethodNames {
+            get {
+                return ((bool)(this["PreserveJavaMethodNames"]));
+            }
+            set {
+                this["PreserveJavaMethodNames"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("False")]
         public bool LogToFile {
             get {

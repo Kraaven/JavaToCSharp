@@ -81,6 +81,7 @@ public class IntegrationTests(ITestOutputHelper testOutputHelper)
         {
             ConvertSystemOutToConsole = true,
             IncludeComments = false,
+            PreserveJavaMethodNames = false,
         };
 
         options.AddUsing("System");

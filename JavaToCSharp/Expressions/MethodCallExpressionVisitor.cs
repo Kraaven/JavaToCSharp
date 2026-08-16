@@ -10,7 +10,8 @@ public class MethodCallExpressionVisitor : ExpressionVisitor<MethodCallExpr>
 {
     protected override ExpressionSyntax? Visit(ConversionContext context, MethodCallExpr methodCallExpr)
     {
-        if (TypeHelper.TryTransformMethodCall(context, methodCallExpr, out var transformedSyntax))
+        if (!context.PreserveJavaMethodNames
+            && TypeHelper.TryTransformMethodCall(context, methodCallExpr, out var transformedSyntax))
         {
             return transformedSyntax;
         }

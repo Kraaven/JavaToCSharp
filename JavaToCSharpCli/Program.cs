@@ -60,6 +60,12 @@ public class Program
         DefaultValueFactory = _ => false,
     };
 
+    private static readonly Option<bool> _preserveJavaMethodNamesOption = new("--preserve-java-method-names")
+    {
+        Description = "Keep Java member names and method calls as-is instead of PascalCasing them / rewriting to C# properties (default: true)",
+        DefaultValueFactory = _ => true,
+    };
+
     private static readonly Option<bool> _clearDefaultUsingsOption = new("--clear-usings")
     {
         Description = "Remove all default usings provided by this app",
@@ -146,6 +152,7 @@ public class Program
         rootCommand.Options.Add(_commentUnrecognizedCodeOption);
         rootCommand.Options.Add(_systemOutToConsoleOption);
         rootCommand.Options.Add(_fileScopedNamespacesOption);
+        rootCommand.Options.Add(_preserveJavaMethodNamesOption);
         rootCommand.Options.Add(_clearDefaultUsingsOption);
         rootCommand.Options.Add(_addUsingsOption);
         rootCommand.Options.Add(_mappingsFileNameOption);
@@ -203,6 +210,7 @@ public class Program
             UseDebugAssertForAsserts = context.GetValue(_useDebugAssertOption),
             UseUnrecognizedCodeToComment = context.GetValue(_commentUnrecognizedCodeOption),
             UseFileScopedNamespaces = context.GetValue(_fileScopedNamespacesOption),
+            PreserveJavaMethodNames = context.GetValue(_preserveJavaMethodNamesOption),
         };
 
         if (context.GetValue(_clearDefaultUsingsOption))

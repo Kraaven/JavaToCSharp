@@ -14,6 +14,7 @@ public static class CurrentOptions
         Options.UseUnrecognizedCodeToComment = Settings.Default.UseUnrecognizedCodeToComment;
         Options.ConvertSystemOutToConsole = Settings.Default.ConvertSystemOutToConsole;
         Options.UseFileScopedNamespaces = Settings.Default.UseFileScopedNamespaces;
+        Options.PreserveJavaMethodNames = Settings.Default.PreserveJavaMethodNames;
         Options.EnableLogging = Settings.Default.EnableLogging;
         Options.LogToFile = Settings.Default.LogToFile;
         Options.LogFilePath = Settings.Default.LogFilePath;
@@ -32,6 +33,7 @@ public static class CurrentOptions
         Settings.Default.UseUnrecognizedCodeToComment = Options.UseUnrecognizedCodeToComment;
         Settings.Default.ConvertSystemOutToConsole = Options.ConvertSystemOutToConsole;
         Settings.Default.UseFileScopedNamespaces = Options.UseFileScopedNamespaces;
+        Settings.Default.PreserveJavaMethodNames = Options.PreserveJavaMethodNames;
         Settings.Default.EnableLogging = Options.EnableLogging;
         Settings.Default.LogToFile = Options.LogToFile;
         Settings.Default.LogFilePath = Options.LogFilePath;

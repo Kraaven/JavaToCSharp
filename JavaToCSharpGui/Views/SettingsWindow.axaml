@@ -42,6 +42,10 @@
                               IsChecked="{CompiledBinding UseFileScopedNamespaces}">
                         Use file-scoped namespaces
                     </CheckBox>
+                    <CheckBox Margin="5" Name="PreserveJavaMethodNames"
+                              IsChecked="{CompiledBinding PreserveJavaMethodNames}">
+                        Preserve Java member names
+                    </CheckBox>
                     <CheckBox Margin="5" Name="IncludeComments"
                               IsChecked="{CompiledBinding IncludeComments}">
                         Include comments in output

@@ -9,6 +9,7 @@ public class SwitchConversionTests(ITestOutputHelper output)
         IncludeNamespace = false,
         IncludeUsings = false,
         IncludeComments = false,
+        PreserveJavaMethodNames = false,
     };
 
     private string Convert(string java)

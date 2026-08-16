@@ -24,7 +24,9 @@ public class ConvertInterfaceTests
                                 }
 
                                 """;
-        var parsed = JavaToCSharpConverter.ConvertText(javaCode).ConvertedText ?? "";
+        var parsed = JavaToCSharpConverter.ConvertText(
+            javaCode,
+            new JavaConversionOptions { PreserveJavaMethodNames = false }).ConvertedText ?? "";
 
         const string expectedCSharpCode = """
                                           using Com.Github.Javaparser.Resolution;

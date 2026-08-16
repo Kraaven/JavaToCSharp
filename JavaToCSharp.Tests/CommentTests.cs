@@ -131,6 +131,7 @@ public class CommentTests(ITestOutputHelper testOutputHelper)
         {
             IncludeUsings = false,
             IncludeNamespace = false,
+            PreserveJavaMethodNames = false,
         };
 
         var parsed = JavaToCSharpConverter.ConvertText(javaCode, options).ConvertedText ?? "";

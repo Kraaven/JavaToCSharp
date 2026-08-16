@@ -17,7 +17,9 @@ public class MethodReferenceExpressionVisitor : ExpressionVisitor<MethodReferenc
             scopeSyntax = VisitExpression(context, scope);
         }
 
-        var methodName = TypeHelper.Capitalize(expr.getIdentifier());
+        var methodName = context.PreserveJavaMethodNames
+            ? expr.getIdentifier()
+            : TypeHelper.Capitalize(expr.getIdentifier());
         methodName = TypeHelper.ReplaceCommonMethodNames(methodName);
 
         ExpressionSyntax methodExpression;

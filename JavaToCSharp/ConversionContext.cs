@@ -83,7 +83,7 @@ public class ConversionContext(
     /// </summary>
     public bool IsConvertingEnumConstantBody { get; set; }
 
-    public bool PreserveJavaMethodNames => IsConvertingRecord || IsConvertingEnum;
+    public bool PreserveJavaMethodNames => Options.PreserveJavaMethodNames || IsConvertingRecord || IsConvertingEnum;
 
     /// <summary>
     /// Maps record component names to private backing field names (e.g. name → name_attribute).

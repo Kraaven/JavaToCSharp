@@ -107,7 +107,13 @@ public class SyntaxMappingTests
     private static string GetParsed(string javaCode, string mappingsYaml)
     {
         var mappings = SyntaxMapping.Deserialize(mappingsYaml);
-        var options = new JavaConversionOptions { IncludeNamespace = false, IncludeUsings = false, SyntaxMappings = mappings };
+        var options = new JavaConversionOptions
+        {
+            IncludeNamespace = false,
+            IncludeUsings = false,
+            SyntaxMappings = mappings,
+            PreserveJavaMethodNames = false,
+        };
         var result = JavaToCSharpConverter.ConvertText(
             javaCode,
             options,
