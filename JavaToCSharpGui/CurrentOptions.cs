@@ -14,6 +14,9 @@ public static class CurrentOptions
         Options.UseUnrecognizedCodeToComment = Settings.Default.UseUnrecognizedCodeToComment;
         Options.ConvertSystemOutToConsole = Settings.Default.ConvertSystemOutToConsole;
         Options.UseFileScopedNamespaces = Settings.Default.UseFileScopedNamespaces;
+        Options.EnableLogging = Settings.Default.EnableLogging;
+        Options.LogToFile = Settings.Default.LogToFile;
+        Options.LogFilePath = Settings.Default.LogFilePath;
 
         Options.SetUsings(Settings.Default.Usings.Split(';'));
     }
@@ -29,6 +32,9 @@ public static class CurrentOptions
         Settings.Default.UseUnrecognizedCodeToComment = Options.UseUnrecognizedCodeToComment;
         Settings.Default.ConvertSystemOutToConsole = Options.ConvertSystemOutToConsole;
         Settings.Default.UseFileScopedNamespaces = Options.UseFileScopedNamespaces;
+        Settings.Default.EnableLogging = Options.EnableLogging;
+        Settings.Default.LogToFile = Options.LogToFile;
+        Settings.Default.LogFilePath = Options.LogFilePath;
         Settings.Default.Usings = string.Join(";", Options.Usings);
 
         Settings.Default.Save();

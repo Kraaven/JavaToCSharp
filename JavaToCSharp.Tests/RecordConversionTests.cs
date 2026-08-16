@@ -17,7 +17,7 @@ public record Point(int x, int y) {
             IncludeNamespace = false,
             IncludeUsings = false,
             IncludeComments = false,
-        });
+        }).ConvertedText;
 
         Assert.NotNull(parsed);
         output.WriteLine(parsed);
@@ -109,7 +109,7 @@ public record Person<T extends Number>(
             IncludeNamespace = false,
             IncludeUsings = false,
             IncludeComments = false,
-        });
+        }).ConvertedText;
 
         Assert.NotNull(parsed);
         output.WriteLine(parsed);
@@ -173,7 +173,7 @@ public class Holder {
             IncludeNamespace = false,
             IncludeUsings = false,
             IncludeComments = false,
-        });
+        }).ConvertedText;
 
         Assert.NotNull(parsed);
         output.WriteLine(parsed);

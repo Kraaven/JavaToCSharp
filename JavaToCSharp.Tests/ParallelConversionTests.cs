@@ -13,12 +13,12 @@ public class ParallelConversionTests
         }
         """;
 
-        var reference = JavaToCSharpConverter.ConvertText(java) ?? "";
+        var reference = JavaToCSharpConverter.ConvertText(java).ConvertedText ?? "";
 
         const int iterations = 64;
         var results = new string[iterations];
 
-        Parallel.For(0, iterations, i => results[i] = JavaToCSharpConverter.ConvertText(java) ?? "");
+        Parallel.For(0, iterations, i => results[i] = JavaToCSharpConverter.ConvertText(java).ConvertedText ?? "");
 
         Assert.All(results, result => Assert.Equal(reference, result));
     }
@@ -42,16 +42,16 @@ public class ParallelConversionTests
         }
         """;
 
-        string referenceEnum = JavaToCSharpConverter.ConvertText(enumJava) ?? "";
-        string referenceInterface = JavaToCSharpConverter.ConvertText(interfaceJava) ?? "";
+        string referenceEnum = JavaToCSharpConverter.ConvertText(enumJava).ConvertedText ?? "";
+        string referenceInterface = JavaToCSharpConverter.ConvertText(interfaceJava).ConvertedText ?? "";
 
         const int iterations = 32;
         var results = new string[iterations * 2];
 
         Parallel.For(0, iterations, i =>
         {
-            results[i * 2] = JavaToCSharpConverter.ConvertText(enumJava) ?? "";
-            results[i * 2 + 1] = JavaToCSharpConverter.ConvertText(interfaceJava) ?? "";
+            results[i * 2] = JavaToCSharpConverter.ConvertText(enumJava).ConvertedText ?? "";
+            results[i * 2 + 1] = JavaToCSharpConverter.ConvertText(interfaceJava).ConvertedText ?? "";
         });
 
         for (int i = 0; i < iterations; i++)
@@ -87,14 +87,14 @@ public class ParallelConversionTests
             """;
         }
 
-        var references = files.Select(f => JavaToCSharpConverter.ConvertText(f) ?? "").ToArray();
+        var references = files.Select(f => JavaToCSharpConverter.ConvertText(f).ConvertedText ?? "").ToArray();
 
         var results = new string[fileCount * passes];
 
         Parallel.For(0, results.Length, idx =>
         {
             int i = idx % fileCount;
-            results[idx] = JavaToCSharpConverter.ConvertText(files[i]) ?? "";
+            results[idx] = JavaToCSharpConverter.ConvertText(files[i]).ConvertedText ?? "";
         });
 
         for (int idx = 0; idx < results.Length; idx++)

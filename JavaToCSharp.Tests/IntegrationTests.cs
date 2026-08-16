@@ -28,7 +28,7 @@ public class IntegrationTests(ITestOutputHelper testOutputHelper)
             IncludeComments = false,
         };
 
-        var parsed = JavaToCSharpConverter.ConvertText(
+        var result = JavaToCSharpConverter.ConvertText(
             File.ReadAllText(filePath),
             options,
             warning: eventArgs =>
@@ -39,9 +39,9 @@ public class IntegrationTests(ITestOutputHelper testOutputHelper)
                 }
             });
 
-        Assert.NotNull(parsed);
+        Assert.Equal(0, result.FailedCount);
 
-        testOutputHelper.WriteLine(parsed);
+        testOutputHelper.WriteLine(result.ConvertedText ?? "");
     }
 
     [Theory]
@@ -53,11 +53,13 @@ public class IntegrationTests(ITestOutputHelper testOutputHelper)
             IncludeComments = false,
         };
 
-        Assert.ThrowsAny<Exception>(() => JavaToCSharpConverter.ConvertText(
+        var result = JavaToCSharpConverter.ConvertText(
             File.ReadAllText(filePath),
             options,
             warning: eventArgs => throw new InvalidOperationException(
-                $"Encountered a warning in conversion when we expected a failure: {eventArgs.Message}")));
+                $"Encountered a warning in conversion when we expected a failure: {eventArgs.Message}"));
+
+        Assert.True(result.FailedCount > 0, "Expected conversion to fail");
     }
 
     [Theory]
@@ -85,12 +87,15 @@ public class IntegrationTests(ITestOutputHelper testOutputHelper)
 
         var javaText = File.ReadAllText(filePath);
 
-        var parsed = JavaToCSharpConverter.ConvertText(
+        var result = JavaToCSharpConverter.ConvertText(
             javaText,
             options,
             warning: eventArgs
                 => throw new InvalidOperationException($"Encountered a warning in conversion: {eventArgs.Message}"));
 
+        Assert.Equal(0, result.FailedCount);
+
+        string? parsed = result.ConvertedText;
         Assert.NotNull(parsed);
 
         testOutputHelper.WriteLine(parsed);

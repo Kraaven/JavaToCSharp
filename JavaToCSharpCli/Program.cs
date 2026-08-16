@@ -1,6 +1,6 @@
-﻿using System.CommandLine;
-using JavaToCSharp;
+﻿using JavaToCSharp;
 using Microsoft.Extensions.Logging;
+using System.CommandLine;
 
 namespace JavaToCSharpCli;
 
@@ -72,9 +72,53 @@ public class Program
         HelpName = "namespace",
     };
 
-    private static readonly Option<string> _mappingsFileNameOption = new("--mappings-file")
+    private static readonly Option<string?> _mappingsFileNameOption = new("--mappings-file")
     {
         Description = "A yaml file with syntax mappings from imports, methods and annotations",
+    };
+
+    private static readonly Option<int> _maxParallelismOption = new("--max-parallelism")
+    {
+        Description = "Maximum degree of parallelism for directory conversion (default: number of CPU cores)",
+        DefaultValueFactory = _ => Environment.ProcessorCount,
+    };
+
+    private static readonly Option<bool> _continueOnErrorOption = new("--continue-on-error")
+    {
+        Description = "Continue converting files even if some fail (default: true)",
+        DefaultValueFactory = _ => true,
+    };
+
+    private static readonly Option<bool> _overwriteOption = new("--overwrite")
+    {
+        Description = "Overwrite existing .cs files (default: true)",
+        DefaultValueFactory = _ => true,
+    };
+
+    private static readonly Option<bool> _statsOption = new("--stats")
+    {
+        Description = "Print conversion statistics (total, succeeded, failed, elapsed, files/sec)",
+        DefaultValueFactory = _ => false,
+    };
+
+    private static readonly Option<bool> _yesOption = new("--yes", "-y")
+    {
+        Description = "Skip the confirmation prompt when --output is omitted (WARNING: this deletes source .java files)",
+        DefaultValueFactory = _ => false,
+    };
+
+    private static readonly Option<bool> _enableLoggingOption = new("--enable-logging")
+    {
+        Description = "Log every file converted (path and result) to the console",
+        DefaultValueFactory = _ => false,
+        Recursive = true,
+    };
+
+    private static readonly Option<string?> _logFileOption = new("--log-file")
+    {
+        Description = "Append every file converted (path and result) to this file (default: conversion.log). Can be passed without a value",
+        Arity = ArgumentArity.ZeroOrOne,
+        Recursive = true,
     };
 
     static Program()
@@ -105,6 +149,8 @@ public class Program
         rootCommand.Options.Add(_clearDefaultUsingsOption);
         rootCommand.Options.Add(_addUsingsOption);
         rootCommand.Options.Add(_mappingsFileNameOption);
+        rootCommand.Options.Add(_enableLoggingOption);
+        rootCommand.Options.Add(_logFileOption);
 
         await rootCommand.Parse(args).InvokeAsync();
 
@@ -137,6 +183,7 @@ public class Program
             var output = context.GetValue(outputArgument);
 
             var options = GetJavaConversionOptions(context);
+            ConfigureLogging(context, options);
 
             ConvertToCSharpFile(input, output, options);
         });
@@ -185,6 +232,22 @@ public class Program
         return options;
     }
 
+    private static void ConfigureLogging(ParseResult context, JavaConversionOptions options)
+    {
+        if (context.GetValue(_enableLoggingOption))
+        {
+            options.EnableLogging = true;
+            options.LogToConsole = true;
+        }
+
+        if (context.GetResult(_logFileOption) is not null)
+        {
+            options.EnableLogging = true;
+            options.LogToFile = true;
+            options.LogFilePath = context.GetValue(_logFileOption) ?? "conversion.log";
+        }
+    }
+
     private static SyntaxMapping ReadMappingsFile(string mappingsFile)
     {
         // Let fail if cannot be read or deserialized to display the exception message in the CLI
@@ -199,31 +262,50 @@ public class Program
             Description = "A directory containing Java source code files to convert",
         };
 
-        var outputArgument = new Argument<DirectoryInfo>("output")
+        var outputArgument = new Argument<DirectoryInfo?>("output")
         {
-            Description = "Path to place the C# output files",
+            Description = "Path to place the C# output files. If omitted, original .java files are converted in place and DELETED (WARNING: destructive mode)",
+            DefaultValueFactory = _ => null,
         };
 
         var dirCommand = new Command("dir", "Convert a directory containing Java files to C#")
         {
             inputArgument,
             outputArgument,
+            _maxParallelismOption,
+            _continueOnErrorOption,
+            _overwriteOption,
+            _statsOption,
+            _yesOption,
         };
 
-        dirCommand.SetAction(context =>
+        dirCommand.SetAction(async context =>
         {
             var input = context.GetRequiredValue(inputArgument);
-            var output = context.GetRequiredValue(outputArgument);
+            var output = context.GetValue(outputArgument);
 
             var options = GetJavaConversionOptions(context);
+            ConfigureLogging(context, options);
 
-            ConvertToCSharpDir(input, output, options);
+            var runOptions = new ConvertDirectoryOptions
+            {
+                MaxDegreeOfParallelism = context.GetValue(_maxParallelismOption),
+                ContinueOnError = context.GetValue(_continueOnErrorOption),
+                Overwrite = context.GetValue(_overwriteOption),
+            };
+
+            await ConvertToCSharpDir(input, output, options, runOptions, context);
         });
 
         return dirCommand;
     }
 
-    private static void ConvertToCSharpDir(DirectoryInfo inputDirectory, DirectoryInfo outputDirectory, JavaConversionOptions options)
+    private static async Task ConvertToCSharpDir(
+        DirectoryInfo inputDirectory,
+        DirectoryInfo? outputDirectory,
+        JavaConversionOptions options,
+        ConvertDirectoryOptions runOptions,
+        ParseResult context)
     {
         if (!inputDirectory.Exists)
         {
@@ -231,23 +313,76 @@ public class Program
             return;
         }
 
-        var searchOption = options.IncludeSubdirectories ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-        var files = inputDirectory.GetFiles("*.java", searchOption)
-            .Where(static f => !string.IsNullOrWhiteSpace(f.DirectoryName))
-            .ToArray();
+        bool replaceMode = outputDirectory is null;
 
-        if (!outputDirectory.Exists)
+        if (replaceMode && !context.GetValue(_yesOption))
+        {
+            _logger.LogWarning(
+                "WARNING: no output directory specified. Original .java files will be DELETED after successful conversion.");
+            Console.Out.Write("Proceed? [y/N]: ");
+            string? answer = Console.ReadLine();
+            if (!string.Equals(answer, "y", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(answer, "yes", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogInformation("Aborted.");
+                return;
+            }
+        }
+
+        if (!replaceMode && outputDirectory is not null && !outputDirectory.Exists)
         {
             outputDirectory.Create();
         }
 
-        Parallel.ForEach(files, f =>
+        _logger.LogInformation("Converting directory {path}...", inputDirectory.FullName);
+
+        var result = await JavaToCSharpConverter.ConvertDirectoryAsync(
+            inputDirectory,
+            outputDirectory,
+            options,
+            runOptions,
+            progress: new Progress<FileConversionProgress>(report =>
+            {
+                if (options.EnableLogging)
+                {
+                    // The library already logs each file (with [index/total]); avoid duplicate output.
+                    return;
+                }
+
+                if (report.Skipped)
+                {
+                    _logger.LogInformation("[SKIPPED] {output}: Output already exists (overwrite=false)", report.OutputPath);
+                }
+                else if (!string.IsNullOrEmpty(report.ErrorMessage))
+                {
+                    _logger.LogWarning("[FAILED] {output}: {message}", report.OutputPath, report.ErrorMessage);
+                }
+                else
+                {
+                    _logger.LogInformation("[SUCCESS] {output}", report.OutputPath);
+                }
+            }));
+
+        if (context.GetValue(_statsOption))
         {
-            ConvertToCSharpFile(f,
-                new FileInfo(Path.Combine(outputDirectory.FullName, Path.ChangeExtension(f.Name, ".cs"))),
-                options,
-                false);
-        });
+            _logger.LogInformation("Total files: {total}", result.TotalFiles);
+            _logger.LogInformation("Succeeded: {succeeded}", result.SucceededCount);
+            _logger.LogInformation("Failed: {failed}", result.FailedCount);
+            _logger.LogInformation("Elapsed: {elapsed}", result.Elapsed);
+            _logger.LogInformation("Files/sec: {rate:F2}", result.FilesPerSecond);
+
+            foreach (var failedFile in result.FailedFiles)
+            {
+                _logger.LogError("Failed file {path}: {message}", failedFile.InputPath, failedFile.ErrorMessage);
+            }
+        }
+        else if (result.FailedCount > 0)
+        {
+            foreach (var failedFile in result.FailedFiles)
+            {
+                _logger.LogError("Failed file {path}: {message}", failedFile.InputPath, failedFile.ErrorMessage);
+            }
+        }
     }
 
     private static void ConvertToCSharpFile(FileSystemInfo inputFile, FileSystemInfo? outputFile, JavaConversionOptions options, bool overwrite = true)
@@ -258,49 +393,43 @@ public class Program
         }
         else if (inputFile.Exists)
         {
-            try
-            {
-                string javaText = File.ReadAllText(inputFile.FullName);
-
-                var warnings = new List<string>();
-
-                string? parsed = JavaToCSharpConverter.ConvertText(
-                    javaText,
-                    options,
-                    warning: eventArgs =>
+            var result = JavaToCSharpConverter.ConvertText(
+                File.ReadAllText(inputFile.FullName),
+                options,
+                sourcePath: inputFile.FullName,
+                warning: eventArgs =>
+                {
+                    if (outputFile != null)
                     {
-                        if (outputFile != null)
-                        {
-                            _logger.LogWarning("Line {JavaLineNumber}: {Message}", eventArgs.JavaLineNumber,
-                                eventArgs.Message);
-                            warnings.Add(eventArgs.Message);
-                        }
-                        else
-                        {
-                            Console.Out.WriteLine(eventArgs.Message);
-                        }
-                    });
+                        _logger.LogWarning("Line {JavaLineNumber}: {Message}", eventArgs.JavaLineNumber,
+                            eventArgs.Message);
+                    }
+                    else
+                    {
+                        Console.Out.WriteLine(eventArgs.Message);
+                    }
+                });
 
-                OutputFileOrPrint(outputFile?.FullName, parsed ?? string.Empty);
-
-                if (warnings.Count > 0 && outputFile != null)
-                {
-                    File.WriteAllLines(Path.ChangeExtension(outputFile.FullName, ".warning"), warnings);
-                }
-
-                if (outputFile != null)
-                {
-                    _logger.LogInformation("{filePath} converted!", inputFile.Name);
-                }
-            }
-            catch (Exception ex)
+            if (result.FailedCount > 0)
             {
-                _logger.LogError("{filePath} failed! {type}: {message}", inputFile.Name, ex.GetType().Name, ex);
+                _logger.LogError("{filePath} failed! {type}: {message}", inputFile.Name,
+                    result.Exceptions[0].Exception.GetType().Name,
+                    result.Exceptions[0].Exception.Message);
 
                 if (outputFile != null)
                 {
-                    File.WriteAllText(Path.ChangeExtension(outputFile.FullName, ".error"), ex.ToString());
+                    File.WriteAllLines(Path.ChangeExtension(outputFile.FullName, ".error"),
+                        result.Exceptions.Select(e => $"{e.Exception.GetType().Name}: {e.Exception.Message}"));
                 }
+
+                return;
+            }
+
+            OutputFileOrPrint(outputFile?.FullName, result.ConvertedText ?? "");
+
+            if (outputFile != null)
+            {
+                _logger.LogInformation("{filePath} converted!", inputFile.Name);
             }
         }
         else

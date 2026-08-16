@@ -108,11 +108,11 @@ public class SyntaxMappingTests
     {
         var mappings = SyntaxMapping.Deserialize(mappingsYaml);
         var options = new JavaConversionOptions { IncludeNamespace = false, IncludeUsings = false, SyntaxMappings = mappings };
-        var parsed = JavaToCSharpConverter.ConvertText(
+        var result = JavaToCSharpConverter.ConvertText(
             javaCode,
             options,
             warning: eventArgs
                 => Console.WriteLine("Line {0}: {1}", eventArgs.JavaLineNumber, eventArgs.Message));
-        return parsed ?? "";
+        return result.ConvertedText ?? "";
     }
 }

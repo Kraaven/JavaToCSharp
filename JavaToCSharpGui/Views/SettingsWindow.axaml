@@ -58,6 +58,18 @@
                               IsChecked="{CompiledBinding ConvertSystemOutToConsole}">
                         Convert System.out to Console
                     </CheckBox>
+                    <CheckBox Margin="5" Name="EnableLogging"
+                              IsChecked="{CompiledBinding EnableLogging}">
+                        Log every file converted (path and result)
+                    </CheckBox>
+                    <CheckBox Margin="5" Name="LogToFile"
+                              IsChecked="{CompiledBinding LogToFile}">
+                        Append logs to a file
+                    </CheckBox>
+                    <TextBox Margin="5" Name="LogFilePath"
+                             Text="{CompiledBinding LogFilePath}"
+                             IsEnabled="{CompiledBinding LogToFile}"
+                             Watermark="conversion.log" />
                 </StackPanel>
             </TabItem>
         </TabControl>

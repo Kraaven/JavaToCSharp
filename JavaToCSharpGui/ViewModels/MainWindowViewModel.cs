@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using Avalonia;
 using Avalonia.Collections;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -51,6 +52,9 @@ public partial class MainWindowViewModel : ViewModelBase
         _dispatcher = dispatcher;
         _clipboard = clipboard;
         DisplayName = "Java to C# Converter";
+
+        CurrentOptions.Options.Log = message =>
+            _ = DispatcherInvoke(() => FolderOutputFiles.Add(message));
     }
 
     [ObservableProperty] private AvaloniaList<FileInfo> _folderInputFiles = [];
@@ -88,12 +92,24 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             try
             {
-                string? csharp = JavaToCSharpConverter.ConvertText(
+                var result = JavaToCSharpConverter.ConvertText(
                     text,
                     CurrentOptions.Options,
                     stateChanged: SetConversionState,
                     warning: e => HandleWarning(e, file: null));
-                await DispatcherInvoke(() => CSharpText.Text = csharp ?? "");
+
+                await DispatcherInvoke(() =>
+                {
+                    if (result.FailedCount > 0)
+                    {
+                        ShowMessage($"Conversion completed with {result.FailedCount} error(s):\n{string.Join(Environment.NewLine, result.Exceptions.Select(e => $"- {e.InputPath}: {e.Exception.Message}"))}",
+                            "Conversion Error");
+                    }
+                    else
+                    {
+                        CSharpText.Text = result.ConvertedText ?? "";
+                    }
+                });
             }
             catch (Exception ex)
             {
@@ -165,75 +181,82 @@ public partial class MainWindowViewModel : ViewModelBase
         _usingFolderConvert = true;
         FolderOutputFiles.Clear();
 
-        var files = FolderInputFiles.Where(static x => x.Directory is not null).ToList();
+        var progressQueue = new ConcurrentQueue<FileConversionProgress>();
 
-        await Task.Run(async () =>
+        var flushTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+        flushTimer.Tick += (_, _) => FlushFolderProgress(progressQueue);
+        flushTimer.Start();
+
+        try
         {
-            try
-            {
-                var dir = new DirectoryInfo(OpenFolderPath);
-                string dirName = dir.Name;
-                string outDirName = $"{dirName}_csharp_output";
-                var outDir = new DirectoryInfo(Path.Combine(OpenFolderPath, outDirName));
+            var dir = new DirectoryInfo(OpenFolderPath);
+            string outDirName = $"{dir.Name}_csharp_output";
+            var outDir = new DirectoryInfo(Path.Combine(OpenFolderPath, outDirName));
 
-                if (!outDir.Exists)
-                    outDir.Create();
+            if (!outDir.Exists)
+                outDir.Create();
 
-                string outDirFullName = outDir.FullName;
-                int subStartIndex = dir.FullName.Length;
-
-                await Parallel.ForEachAsync(files, async (jFile, cancellationToken) =>
+            var result = await JavaToCSharpConverter.ConvertDirectoryAsync(
+                dir,
+                outDir,
+                CurrentOptions.Options,
+                new ConvertDirectoryOptions
                 {
-                    // ! null checked above
-                    string jPath = jFile.Directory!.FullName;
-                    string jOutPath = $"{outDirFullName}{jPath[subStartIndex..]}";
-                    string jOutFileName = Path.GetFileNameWithoutExtension(jFile.Name) + ".cs";
-                    string jOutFileFullName = Path.Combine(jOutPath, jOutFileName);
+                    MaxDegreeOfParallelism = Environment.ProcessorCount,
+                    ContinueOnError = true,
+                    Overwrite = true,
+                },
+                progress: new Progress<FileConversionProgress>(progressQueue.Enqueue));
 
-                    Directory.CreateDirectory(jOutPath);
+            flushTimer.Stop();
+            FlushFolderProgress(progressQueue);
 
-                    string jText = await File.ReadAllTextAsync(jFile.FullName, cancellationToken);
-
-                    if (string.IsNullOrEmpty(jText))
-                        return;
-
-                    try
-                    {
-                        string? csText = JavaToCSharpConverter.ConvertText(
-                            jText,
-                            CurrentOptions.Options,
-                            stateChanged: SetConversionState,
-                            warning: e => HandleWarning(e, jFile.FullName));
-                        await File.WriteAllTextAsync(jOutFileFullName, csText, cancellationToken);
-
-                        await DispatcherInvoke(() =>
-                        {
-                            FolderOutputFiles.Add(jOutFileFullName);
-                        });
-                    }
-                    catch (Exception ex)
-                    {
-                        await DispatcherInvoke(() =>
-                        {
-                            ShowMessage($"There was an error converting {jFile.FullName} to C#: {ex.GetBaseException().Message}",
-                                "Conversion Error");
-                        });
-                    }
-                });
-            }
-            catch (Exception ex)
+            if (result.FailedCount > 0)
             {
-                await DispatcherInvoke(() =>
-                    ShowMessage($"There was an error converting the text to C#: {ex.GetBaseException().Message}",
-                        "Conversion Error"));
+                await DispatcherInvoke(() => ShowMessage(
+                    $"Completed {result.SucceededCount}/{result.TotalFiles} files, {result.FailedCount} failed.",
+                    "Folder Conversion"));
+            }
+        }
+        catch (Exception ex)
+        {
+            await DispatcherInvoke(() =>
+                ShowMessage($"There was an error converting the directory: {ex.GetBaseException().Message}",
+                    "Directory Conversion Error"));
 
-                await DispatcherInvoke(() => ConversionStateLabel = "");
-            }
-            finally
+            await DispatcherInvoke(() => ConversionStateLabel = "");
+        }
+        finally
+        {
+            flushTimer.Stop();
+            await DispatcherInvoke(() => IsConvertEnabled = true);
+        }
+    }
+
+    private void FlushFolderProgress(ConcurrentQueue<FileConversionProgress> queue)
+    {
+        while (queue.TryDequeue(out var report))
+        {
+            if (CurrentOptions.Options.EnableLogging)
             {
-                await DispatcherInvoke(() => IsConvertEnabled = true);
+                // The library already logs each file (with [index/total]) via the Log callback;
+                // avoid duplicate lines in the output list.
+                continue;
             }
-        });
+
+            if (report.Skipped)
+            {
+                FolderOutputFiles.Add($"[SKIPPED] {report.OutputPath}");
+            }
+            else if (!string.IsNullOrEmpty(report.ErrorMessage))
+            {
+                FolderOutputFiles.Add($"[FAILED] {report.OutputPath}: {report.ErrorMessage}");
+            }
+            else
+            {
+                FolderOutputFiles.Add($"[SUCCESS] {report.OutputPath}");
+            }
+        }
     }
 
     [RelayCommand]
@@ -362,14 +385,25 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             try
             {
-                string? csharp = JavaToCSharpConverter.ConvertText(
+                var result = JavaToCSharpConverter.ConvertText(
                     clipboardText,
                     CurrentOptions.Options,
                     stateChanged: SetConversionState,
                     warning: e => HandleWarning(e, file: null));
-                await DispatcherInvoke(() => CSharpText.Text = csharp ?? "");
 
-                // Copy result to clipboard
+                if (result.FailedCount > 0)
+                {
+                    await DispatcherInvoke(() => ShowMessage(
+                        $"Conversion completed with {result.FailedCount} error(s):\n{string.Join(Environment.NewLine, result.Exceptions.Select(e => $"- {e.InputPath}: {e.Exception.Message}"))}",
+                        "Conversion Error"));
+
+                    await DispatcherInvoke(() => ConversionStateLabel = "Conversion completed with errors.");
+                    return;
+                }
+
+                string? csharp = result.ConvertedText;
+
+                await DispatcherInvoke(() => CSharpText.Text = csharp ?? "");
                 await _clipboard.SetTextAsync(csharp ?? "");
                 ConversionStateLabel = "Conversion complete! C# code copied to clipboard.";
 

@@ -22,6 +22,66 @@ from the command line.
 
 The core library is installable via NuGet at https://www.nuget.org/packages/JavaToCSharp/
 
+## Library API
+
+### ConvertText (single file / string)
+
+`JavaToCSharpConverter.ConvertText(string javaText, ...)` returns a `ConversionResult` and **never throws** for
+parse or conversion failures. Check `result.FailedCount` and read the generated C# from `result.ConvertedText`:
+
+```csharp
+var result = JavaToCSharpConverter.ConvertText(javaSource, options);
+
+if (result.FailedCount > 0)
+{
+    Console.WriteLine($"Conversion failed: {result.FailedFiles[0].ErrorMessage}");
+    return;
+}
+
+Console.WriteLine(result.ConvertedText);
+```
+
+`ConversionResult` also exposes `TotalFiles`, `SucceededFiles`, `FailedFiles`, `Exceptions`, `Elapsed` and
+`FilesPerSecond` for reporting.
+
+### ConvertDirectoryAsync (parallel, multi-file)
+
+Convert every `*.java` file under a directory in parallel:
+
+```csharp
+var result = await JavaToCSharpConverter.ConvertDirectoryAsync(
+    new DirectoryInfo("C:\\src\\java"),
+    new DirectoryInfo("C:\\src\\csharp"));   // mirrored output tree; originals untouched
+
+Console.WriteLine($"Converted {result.SucceededCount}/{result.TotalFiles} in {result.Elapsed}");
+```
+
+> **WARNING:** passing `outputDirectory: null` enables **destructive replace mode** — each `Foo.java` is
+> converted in place to `Foo.cs` and the original `.java` file is **deleted** after a successful write.
+> A failed file's `.java` is preserved. Prefer the non-destructive form unless you are sure.
+
+Conversion is tunable via `ConvertDirectoryOptions` (`MaxDegreeOfParallelism`, `Overwrite`,
+`ContinueOnError`), and per-file progress can be observed with `IProgress<FileConversionProgress>`
+plus a `CancellationToken`.
+
+### Per-file logging (optional)
+
+Set `JavaConversionOptions.EnableLogging` to `true` to log every file as it is converted
+(`path -> OK`, `path -> SKIPPED (output already exists)`, or `path -> FAILED: <exception>`).
+Directory conversions prefix each line with `[index/total]`. The master switch is off by default;
+each sink has its own switch: `LogToConsole`, `LogToCallback` (with `Log`),
+and `LogToFile` (with `LogFilePath`, default `conversion.log`).
+
+```csharp
+var options = new JavaConversionOptions
+{
+    EnableLogging = true,
+    LogToConsole = true,
+    LogToFile = true,
+    LogFilePath = "conversion.log",
+};
+```
+
 ## Syntax Mappings
 
 By default, JavaToCSharp translates some usual Java classes and methods into their C# counterparts 

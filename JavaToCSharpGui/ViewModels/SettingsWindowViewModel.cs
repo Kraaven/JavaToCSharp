@@ -26,6 +26,12 @@ public partial class SettingsWindowViewModel : ViewModelBase
 
     [ObservableProperty] private bool _useFileScopedNamespaces = CurrentOptions.Options.UseFileScopedNamespaces;
 
+    [ObservableProperty] private bool _enableLogging = CurrentOptions.Options.EnableLogging;
+
+    [ObservableProperty] private bool _logToFile = CurrentOptions.Options.LogToFile;
+
+    [ObservableProperty] private string _logFilePath = CurrentOptions.Options.LogFilePath;
+
     public event EventHandler? CloseRequested;
 
     [RelayCommand]
@@ -54,6 +60,9 @@ public partial class SettingsWindowViewModel : ViewModelBase
         CurrentOptions.Options.UseUnrecognizedCodeToComment = UnrecognizedCodeToComment;
         CurrentOptions.Options.ConvertSystemOutToConsole = ConvertSystemOutToConsole;
         CurrentOptions.Options.UseFileScopedNamespaces = UseFileScopedNamespaces;
+        CurrentOptions.Options.EnableLogging = EnableLogging;
+        CurrentOptions.Options.LogToFile = LogToFile;
+        CurrentOptions.Options.LogFilePath = LogFilePath;
 
         CurrentOptions.Options.SetUsings(Usings);
 

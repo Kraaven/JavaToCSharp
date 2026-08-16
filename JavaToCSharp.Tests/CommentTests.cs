@@ -25,7 +25,7 @@ public class CommentTests(ITestOutputHelper testOutputHelper)
 
         options.ClearUsings();
 
-        var parsed = JavaToCSharpConverter.ConvertText(javaCode, options) ?? "";
+        var parsed = JavaToCSharpConverter.ConvertText(javaCode, options).ConvertedText ?? "";
 
         testOutputHelper.WriteLine(parsed);
 
@@ -73,7 +73,7 @@ public class CommentTests(ITestOutputHelper testOutputHelper)
 
         options.ClearUsings();
 
-        var parsed = JavaToCSharpConverter.ConvertText(javaCode, options) ?? "";
+        var parsed = JavaToCSharpConverter.ConvertText(javaCode, options).ConvertedText ?? "";
 
         testOutputHelper.WriteLine(parsed);
 
@@ -133,7 +133,7 @@ public class CommentTests(ITestOutputHelper testOutputHelper)
             IncludeNamespace = false,
         };
 
-        var parsed = JavaToCSharpConverter.ConvertText(javaCode, options) ?? "";
+        var parsed = JavaToCSharpConverter.ConvertText(javaCode, options).ConvertedText ?? "";
 
         testOutputHelper.WriteLine(parsed);
 

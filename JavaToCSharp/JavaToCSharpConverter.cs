@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Diagnostics;
+using System.Text;
 using System.Text.RegularExpressions;
 using com.github.javaparser;
 using com.github.javaparser.ast;
@@ -32,11 +33,84 @@ public static partial class JavaToCSharpConverter
         ["double"] = "Double",
     };
 
-    public static string? ConvertText(
+    /// <summary>
+    /// Converts a single Java source snippet to C#.
+    /// </summary>
+    /// <remarks>
+    /// Returns a <see cref="ConversionResult"/> and never throws for parse/conversion failures —
+    /// check <see cref="ConversionResult.FailedCount"/> (and read the generated text from
+    /// <see cref="ConversionResult.ConvertedText"/>) instead of catching exceptions.
+    /// When <see cref="JavaConversionOptions.EnableLogging"/> is set, one log line is emitted:
+    /// <c>&lt;path&gt; -&gt; OK</c> on success and <c>&lt;path&gt; -&gt; FAILED: &lt;exception&gt;</c> on failure.
+    /// </remarks>
+    /// <param name="javaText">The Java source code to convert.</param>
+    /// <param name="options">Conversion options. Defaults to <see cref="JavaConversionOptions"/>.</param>
+    /// <param name="sourcePath">Optional source path used in logs and <see cref="ConversionResult"/> entries; defaults to "&lt;inline&gt;".</param>
+    /// <param name="stateChanged">Optional callback raised as conversion state changes.</param>
+    /// <param name="warning">Optional callback raised for conversion warnings.</param>
+    /// <returns>A <see cref="ConversionResult"/> describing the single-file run.</returns>
+    public static ConversionResult ConvertText(
         string? javaText,
         JavaConversionOptions? options = null,
+        string? sourcePath = null,
         Action<ConversionState>? stateChanged = null,
         Action<ConversionWarningEventArgs>? warning = null)
+    {
+        var result = ConvertTextResult(javaText, options, sourcePath, stateChanged, warning);
+
+        if (result.FailedCount > 0)
+        {
+            options?.LogMessage($"{result.FailedFiles[0].InputPath} -> FAILED: {result.FailedFiles[0].Exception}");
+        }
+        else
+        {
+            options?.LogMessage($"{result.SucceededFiles[0].InputPath} -> OK");
+        }
+
+        return result;
+    }
+
+    private static ConversionResult ConvertTextResult(
+        string? javaText,
+        JavaConversionOptions? options,
+        string? sourcePath,
+        Action<ConversionState>? stateChanged,
+        Action<ConversionWarningEventArgs>? warning)
+    {
+        var sw = Stopwatch.StartNew();
+        string source = sourcePath ?? "<inline>";
+
+        try
+        {
+            string? csharp = ConvertTextCore(javaText, options, stateChanged, warning);
+
+            return new ConversionResult
+            {
+                TotalFiles = 1,
+                SucceededFiles = [new ConvertedFile(source, null)],
+                FailedFiles = [],
+                Elapsed = sw.Elapsed,
+                ConvertedText = csharp,
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ConversionResult
+            {
+                TotalFiles = 1,
+                SucceededFiles = [],
+                FailedFiles = [new FailedFile(source, ex.Message, ex)],
+                Elapsed = sw.Elapsed,
+                ConvertedText = null,
+            };
+        }
+    }
+
+    private static string? ConvertTextCore(
+        string? javaText,
+        JavaConversionOptions? options,
+        Action<ConversionState>? stateChanged,
+        Action<ConversionWarningEventArgs>? warning)
     {
         options ??= new JavaConversionOptions();
 

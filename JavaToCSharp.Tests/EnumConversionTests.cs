@@ -18,7 +18,7 @@ public enum Day {
             IncludeNamespace = false,
             IncludeUsings = false,
             IncludeComments = false,
-        });
+        }).ConvertedText;
 
         Assert.NotNull(parsed);
         output.WriteLine(parsed);
@@ -110,7 +110,7 @@ public enum Operation {
             IncludeNamespace = false,
             IncludeUsings = false,
             IncludeComments = false,
-        });
+        }).ConvertedText;
 
         Assert.NotNull(parsed);
         output.WriteLine(parsed);

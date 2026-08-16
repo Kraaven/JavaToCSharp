@@ -12,6 +12,9 @@
 	<WarningsNotAsErrors>NU1903</WarningsNotAsErrors>
 	<AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <AvaloniaVersion>11.3.8</AvaloniaVersion>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <TieredPGO>true</TieredPGO>
   </PropertyGroup>
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />

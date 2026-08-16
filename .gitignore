@@ -219,3 +219,5 @@ pip-log.txt
 
 .vs/
 .idea/
+# BenchmarkDotNet results
+BenchmarkDotNet.Artifacts/

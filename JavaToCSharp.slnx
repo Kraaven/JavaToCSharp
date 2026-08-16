@@ -9,4 +9,5 @@
   <Project Path="JavaToCSharp/JavaToCSharp.csproj" />
   <Project Path="JavaToCSharpCli/JavaToCSharpCli.csproj" />
   <Project Path="JavaToCSharpGui/JavaToCSharpGui.csproj" />
+  <Project Path="JavaToCSharp.Benchmarks/JavaToCSharp.Benchmarks.csproj" />
 </Solution>

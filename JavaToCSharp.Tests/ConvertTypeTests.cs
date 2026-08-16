@@ -134,7 +134,7 @@ public class ConvertTypeTests
             IncludeUsings = false,
             IncludeNamespace = false,
         };
-        var parsed = JavaToCSharpConverter.ConvertText(javaCode, options) ?? "";
+        var parsed = JavaToCSharpConverter.ConvertText(javaCode, options).ConvertedText ?? "";
         string expected = $$"""
                                 public class {{csharpClass}}
                                 {

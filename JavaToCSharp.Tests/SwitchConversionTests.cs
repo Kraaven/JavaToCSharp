@@ -13,10 +13,11 @@ public class SwitchConversionTests(ITestOutputHelper output)
 
     private string Convert(string java)
     {
-        var parsed = JavaToCSharpConverter.ConvertText(java, Options());
-        Assert.NotNull(parsed);
+        var result = JavaToCSharpConverter.ConvertText(java, Options());
+        Assert.Equal(0, result.FailedCount);
+        string parsed = result.ConvertedText ?? "";
         output.WriteLine(parsed);
-        return parsed!;
+        return parsed;
     }
 
     [Fact]

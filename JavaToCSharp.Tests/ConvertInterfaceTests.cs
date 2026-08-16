@@ -24,7 +24,7 @@ public class ConvertInterfaceTests
                                 }
 
                                 """;
-        var parsed = JavaToCSharpConverter.ConvertText(javaCode) ?? "";
+        var parsed = JavaToCSharpConverter.ConvertText(javaCode).ConvertedText ?? "";
 
         const string expectedCSharpCode = """
                                           using Com.Github.Javaparser.Resolution;
@@ -63,7 +63,7 @@ public class ConvertInterfaceTests
                                 public interface CharTermAttribute extends Attribute, CharSequence, Appendable {
                                 }
                                 """;
-        var parsed = JavaToCSharpConverter.ConvertText(javaCode) ?? "";
+        var parsed = JavaToCSharpConverter.ConvertText(javaCode).ConvertedText ?? "";
 
         const string expected = """
                                 namespace MyApp
