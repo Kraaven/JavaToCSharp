@@ -50,12 +50,7 @@ public class ClassOrInterfaceDeclarationVisitor : BodyDeclarationVisitor<ClassOr
 
         var mods = interfaceDecl.getModifiers().ToModifierKeywordSet();
 
-        if (mods.Contains(Modifier.Keyword.PRIVATE))
-            classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword));
-        if (mods.Contains(Modifier.Keyword.PROTECTED))
-            classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.ProtectedKeyword));
-        if (mods.Contains(Modifier.Keyword.PUBLIC))
-            classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword));
+        classSyntax = ModifierHelper.AddAccessModifiers(classSyntax, mods);
         if (mods.Contains(Modifier.Keyword.FINAL))
             classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.SealedKeyword));
 
@@ -132,24 +127,14 @@ public class ClassOrInterfaceDeclarationVisitor : BodyDeclarationVisitor<ClassOr
 
         var mods = classDecl.getModifiers().ToModifierKeywordSet();
 
-        if (mods.Contains(Modifier.Keyword.PRIVATE))
-            classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword));
-        if (mods.Contains(Modifier.Keyword.PROTECTED))
-            classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.ProtectedKeyword));
-        if (mods.Contains(Modifier.Keyword.PUBLIC))
-            classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword));
-        if (mods.Contains(Modifier.Keyword.ABSTRACT))
-            classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.AbstractKeyword));
-        if (mods.Contains(Modifier.Keyword.FINAL))
-            classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.SealedKeyword));
+        classSyntax = ModifierHelper.AddAccessModifiers(classSyntax, mods);
+        classSyntax = ModifierHelper.AddNonAccessModifiers(classSyntax, mods,
+            mapAbstract: true, mapFinalToSealed: true);
 
         // Java's package-private default has no access modifier keyword. In C# nested classes
         // default to private, which makes their members inaccessible from the enclosing class.
         // Promote modifier-less nested classes to public so they remain usable.
-        if (isNested
-            && !mods.Contains(Modifier.Keyword.PRIVATE)
-            && !mods.Contains(Modifier.Keyword.PROTECTED)
-            && !mods.Contains(Modifier.Keyword.PUBLIC))
+        if (isNested && ModifierHelper.IsPackagePrivate(mods))
         {
             classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword));
         }
@@ -223,22 +208,10 @@ public class ClassOrInterfaceDeclarationVisitor : BodyDeclarationVisitor<ClassOr
         {
             foreach (var annotation in annotations)
             {
-                string annotationName = annotation.getNameAsString();
-                const string annotationText = "Obsolete"; // TODO parse from java comment
-
-                if (annotationName == "Deprecated")
+                var obsoleteAttr = AnnotationHelper.ConvertDeprecatedToObsolete(annotation);
+                if (obsoleteAttr is not null)
                 {
-                    classSyntax = classSyntax.AddAttributeLists(SyntaxFactory.AttributeList(
-                            SyntaxFactory.SingletonSeparatedList(
-                                SyntaxFactory.Attribute(SyntaxFactory.IdentifierName("Obsolete"))
-                                    .WithArgumentList(
-                                        SyntaxFactory.AttributeArgumentList(
-                                            SyntaxFactory.SingletonSeparatedList(
-                                                SyntaxFactory.AttributeArgument(
-                                                    SyntaxFactory.LiteralExpression(
-                                                        SyntaxKind.StringLiteralExpression,
-                                                        SyntaxFactory.Literal(annotationText)))))))));
-
+                    classSyntax = classSyntax.AddAttributeLists(obsoleteAttr);
                     break;
                 }
             }

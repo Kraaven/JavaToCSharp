@@ -41,7 +41,9 @@ public partial class SettingsWindowViewModel : ViewModelBase
 
     [ObservableProperty] private bool _unrecognizedCodeToComment = CurrentOptions.Options.UseUnrecognizedCodeToComment;
 
+#pragma warning disable CS0618 // Type or member is obsolete
     [ObservableProperty] private bool _convertSystemOutToConsole = CurrentOptions.Options.ConvertSystemOutToConsole;
+#pragma warning restore CS0618
 
     [ObservableProperty] private bool _useFileScopedNamespaces = CurrentOptions.Options.UseFileScopedNamespaces;
 
@@ -100,7 +102,9 @@ public partial class SettingsWindowViewModel : ViewModelBase
         CurrentOptions.Options.IncludeComments = IncludeComments;
         CurrentOptions.Options.UseDebugAssertForAsserts = UseDebugAssertForAsserts;
         CurrentOptions.Options.UseUnrecognizedCodeToComment = UnrecognizedCodeToComment;
+#pragma warning disable CS0618 // Type or member is obsolete
         CurrentOptions.Options.ConvertSystemOutToConsole = ConvertSystemOutToConsole;
+#pragma warning restore CS0618
         CurrentOptions.Options.UseFileScopedNamespaces = UseFileScopedNamespaces;
         CurrentOptions.Options.PreserveJavaMethodNames = PreserveJavaMethodNames;
         CurrentOptions.Options.EnableLogging = EnableLogging;

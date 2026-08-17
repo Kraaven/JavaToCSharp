@@ -26,7 +26,10 @@ public class DirectoryConversionTests
             var result = await JavaToCSharpConverter.ConvertDirectoryAsync(
                 inputDir,
                 outputDirectory: null,
-                new JavaConversionOptions { ConvertSystemOutToConsole = true },
+                new JavaConversionOptions
+                {
+                    MappingIndex = TypeMapping.BuiltInMappings.Load(TypeMapping.BuiltInMappingSpec.Console),
+                },
                 new ConvertDirectoryOptions { ContinueOnError = true });
 
             Assert.Equal(1, result.TotalFiles);
@@ -278,7 +281,10 @@ public class DirectoryConversionTests
             }
             """;
 
-        var result = JavaToCSharpConverter.ConvertText(java, new JavaConversionOptions { ConvertSystemOutToConsole = true });
+        var result = JavaToCSharpConverter.ConvertText(java, new JavaConversionOptions
+        {
+            MappingIndex = TypeMapping.BuiltInMappings.Load(TypeMapping.BuiltInMappingSpec.Console),
+        });
 
         Assert.Equal(1, result.TotalFiles);
         Assert.Equal(1, result.SucceededCount);

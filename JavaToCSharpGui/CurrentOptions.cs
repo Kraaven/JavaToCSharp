@@ -18,7 +18,9 @@ public static class CurrentOptions
         Options.IncludeComments = Settings.Default.IncludeComments;
         Options.UseDebugAssertForAsserts = Settings.Default.UseDebugAssertPreference;
         Options.UseUnrecognizedCodeToComment = Settings.Default.UseUnrecognizedCodeToComment;
+#pragma warning disable CS0618 // Type or member is obsolete
         Options.ConvertSystemOutToConsole = Settings.Default.ConvertSystemOutToConsole;
+#pragma warning restore CS0618
         Options.UseFileScopedNamespaces = Settings.Default.UseFileScopedNamespaces;
         Options.PreserveJavaMethodNames = Settings.Default.PreserveJavaMethodNames;
         Options.EnableLogging = Settings.Default.EnableLogging;
@@ -65,7 +67,9 @@ public static class CurrentOptions
         Settings.Default.IncludeComments = Options.IncludeComments;
         Settings.Default.UseDebugAssertPreference = Options.UseDebugAssertForAsserts;
         Settings.Default.UseUnrecognizedCodeToComment = Options.UseUnrecognizedCodeToComment;
+#pragma warning disable CS0618 // Type or member is obsolete
         Settings.Default.ConvertSystemOutToConsole = Options.ConvertSystemOutToConsole;
+#pragma warning restore CS0618
         Settings.Default.UseFileScopedNamespaces = Options.UseFileScopedNamespaces;
         Settings.Default.PreserveJavaMethodNames = Options.PreserveJavaMethodNames;
         Settings.Default.EnableLogging = Options.EnableLogging;

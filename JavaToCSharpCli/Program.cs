@@ -51,8 +51,9 @@ public class Program
 
     private static readonly Option<bool> _systemOutToConsoleOption = new("--system-out-to-console")
     {
-        Description = "Convert System.out calls to Console",
+        Description = "[Deprecated] Convert System.out calls to Console. Use --console-mapping instead.",
         DefaultValueFactory = _ => false,
+        Hidden = true,
     };
 
     private static readonly Option<bool> _fileScopedNamespacesOption = new("--file-scoped-namespaces")
@@ -77,11 +78,6 @@ public class Program
     {
         Description = "Adds a using directive to the collection of usings",
         HelpName = "namespace",
-    };
-
-    private static readonly Option<string?> _mappingsFileNameOption = new("--mappings-file")
-    {
-        Description = "A yaml file with syntax mappings from imports, methods and annotations",
     };
 
     private static readonly Option<List<string>> _mappingFileOption = new("--mapping-file")
@@ -198,7 +194,6 @@ public class Program
         rootCommand.Options.Add(_preserveJavaMethodNamesOption);
         rootCommand.Options.Add(_clearDefaultUsingsOption);
         rootCommand.Options.Add(_addUsingsOption);
-        rootCommand.Options.Add(_mappingsFileNameOption);
         rootCommand.Options.Add(_mappingFileOption);
         rootCommand.Options.Add(_consoleMappingOption);
         rootCommand.Options.Add(_systemMappingOption);
@@ -256,12 +251,15 @@ public class Program
             IncludeUsings = context.GetValue(_includeUsingsOption),
             IncludeComments = context.GetValue(_includeCommentsOption),
             IncludeNamespace = context.GetValue(_includeNamespaceOption),
-            ConvertSystemOutToConsole = context.GetValue(_systemOutToConsoleOption),
             UseDebugAssertForAsserts = context.GetValue(_useDebugAssertOption),
             UseUnrecognizedCodeToComment = context.GetValue(_commentUnrecognizedCodeOption),
             UseFileScopedNamespaces = context.GetValue(_fileScopedNamespacesOption),
             PreserveJavaMethodNames = context.GetValue(_preserveJavaMethodNamesOption),
         };
+
+#pragma warning disable CS0618 // Type or member is obsolete
+        options.ConvertSystemOutToConsole = context.GetValue(_systemOutToConsoleOption);
+#pragma warning restore CS0618
 
         if (context.GetValue(_clearDefaultUsingsOption))
         {
@@ -279,12 +277,6 @@ public class Program
         foreach (string ns in context.GetValue(_addUsingsOption) ?? [])
         {
             options.AddUsing(ns);
-        }
-
-        var mappingsFile = context.GetValue(_mappingsFileNameOption);
-        if (!string.IsNullOrEmpty(mappingsFile))
-        {
-            options.SyntaxMappings = ReadMappingsFile(mappingsFile);
         }
 
         var mappingFiles = context.GetValue(_mappingFileOption);
@@ -353,13 +345,6 @@ public class Program
             options.LogToFile = true;
             options.LogFilePath = context.GetValue(_logFileOption) ?? "conversion.log";
         }
-    }
-
-    private static SyntaxMapping ReadMappingsFile(string mappingsFile)
-    {
-        // Let fail if cannot be read or deserialized to display the exception message in the CLI
-        var mappingsStr = File.ReadAllText(mappingsFile);
-        return SyntaxMapping.Deserialize(mappingsStr);
     }
 
     private static Command CreateDirectoryCommand()

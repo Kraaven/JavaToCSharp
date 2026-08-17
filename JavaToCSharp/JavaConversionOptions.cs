@@ -30,6 +30,13 @@ public class JavaConversionOptions
     /// </summary>
     public bool UseUnrecognizedCodeToComment { get; set; } = true;
 
+    /// <summary>
+    /// When true, converts <c>System.out.print/println</c> to <c>Console.Write/WriteLine</c>.
+    /// This is now handled by the built-in Console mapping when <see cref="MappingIndex"/>
+    /// includes <see cref="TypeMapping.BuiltInMappingSpec.Console"/>. This property is retained
+    /// for backward compatibility and will be removed in a future version.
+    /// </summary>
+    [Obsolete("Use MappingIndex with BuiltInMappingSpec.Console instead. This property will be removed in a future version.")]
     public bool ConvertSystemOutToConsole { get; set; }
 
     public bool IncludeComments { get; set; } = true;
@@ -109,8 +116,6 @@ public class JavaConversionOptions
         }
     }
 
-    public SyntaxMapping SyntaxMappings { get; set; } = new SyntaxMapping();
-
     /// <summary>
     /// An optional, pre-loaded member-level mapping set. When set, member access and method
     /// call resolution runs against it first, and any matching entry overrides all default
@@ -118,6 +123,14 @@ public class JavaConversionOptions
     /// through to the normal conversion logic. Instances are immutable and safe to share.
     /// </summary>
     public TypeMappingIndex? MappingIndex { get; set; }
+
+    /// <summary>
+    /// Java packages that are automatically imported in every Java file (without an explicit
+    /// import statement). Used by the namespace-aware mapping pre-scan to include these
+    /// packages when determining which types should be resolved through the mapping index.
+    /// Defaults to <c>["java.lang"]</c>.
+    /// </summary>
+    public IReadOnlyList<string> AutoImportedJavaPackages { get; set; } = ["java.lang"];
 
     public JavaConversionOptions AddPackageReplacement(string pattern, string replacement, RegexOptions options = RegexOptions.None)
     {

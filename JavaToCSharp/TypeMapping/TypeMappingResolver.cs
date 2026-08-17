@@ -23,7 +23,7 @@ public enum MappingResolutionStatus
     /// <summary>The mapping set says this member has no safe mapping; the output contains the
     /// original Java fragment annotated with a <c>TODO(java-to-csharp)</c> comment.</summary>
     Unsupported,
-}
+    }
 
 /// <summary>
 /// Resolves Java member access chains (e.g. <c>java.lang.Math.abs(x)</c> or
@@ -33,6 +33,24 @@ public enum MappingResolutionStatus
 /// </summary>
 public static class TypeMappingResolver
 {
+    /// <summary>
+    /// Checks if the root name of a chain (e.g. "System" in "System.out.println") belongs to
+    /// a Java package that is active (imported) in the current file. Uses the mapping index
+    /// to reverse-lookup which package the root type belongs to.
+    /// </summary>
+    private static bool IsRootPackageActive(FileMappingContext fileCtx, TypeMappingIndex index, string rootName)
+    {
+        // Try to find the root as a known class in the mapping index
+        if (index.TryGetBySimpleName(rootName, out var cls, out _))
+        {
+            // Check if that class's package is active
+            return fileCtx.IsPackageActive(cls!.JavaClass);
+        }
+
+        // If the root is a simple name and we can't find it in the index, it might be a
+        // user-defined type. Don't gate it — let it fall through to default conversion.
+        return true;
+    }
     private static readonly Regex TemplatePlaceholderRegex = new(@"\$(\d+|rest)", RegexOptions.Compiled);
 
     private static readonly Regex QualifiedTypeNameRegex = new(
@@ -58,8 +76,21 @@ public static class TypeMappingResolver
             return MappingResolutionStatus.Unresolved;
         }
 
-        var chain = ExtractChain(call, isMethodCall: true);
+        // Namespace-gated: skip mapping if this file has no mapped packages at all
+        var fileCtx = context.FileMappingContext;
+        if (fileCtx is not null && !fileCtx.HasAnyMappedPackage)
+        {
+            return MappingResolutionStatus.Unresolved;
+        }
+
+        var chain = ChainExtractor.Extract(call, isMethodCall: true);
         if (chain is null)
+        {
+            return MappingResolutionStatus.Unresolved;
+        }
+
+        // Namespace-gated: skip if the root of the chain doesn't belong to an active package
+        if (fileCtx is not null && chain.Count > 0 && !IsRootPackageActive(fileCtx, index, chain[0]))
         {
             return MappingResolutionStatus.Unresolved;
         }
@@ -86,8 +117,21 @@ public static class TypeMappingResolver
             return MappingResolutionStatus.Unresolved;
         }
 
-        var chain = ExtractChain(field, isMethodCall: false);
+        // Namespace-gated: skip mapping if this file has no mapped packages at all
+        var fileCtx = context.FileMappingContext;
+        if (fileCtx is not null && !fileCtx.HasAnyMappedPackage)
+        {
+            return MappingResolutionStatus.Unresolved;
+        }
+
+        var chain = ChainExtractor.Extract(field, isMethodCall: false);
         if (chain is null)
+        {
+            return MappingResolutionStatus.Unresolved;
+        }
+
+        // Namespace-gated: skip if the root of the chain doesn't belong to an active package
+        if (fileCtx is not null && chain.Count > 0 && !IsRootPackageActive(fileCtx, index, chain[0]))
         {
             return MappingResolutionStatus.Unresolved;
         }
@@ -107,46 +151,6 @@ public static class TypeMappingResolver
     /// are considered; a method call is only allowed as the outermost node (intermediate
     /// method calls carry arguments the chain cannot represent, so they are not resolvable).
     /// </summary>
-    private static List<string>? ExtractChain(Expression node, bool isMethodCall)
-    {
-        var names = new List<string>();
-        var current = node;
-        var first = true;
-
-        while (true)
-        {
-            switch (current)
-            {
-                case MethodCallExpr methodCall when first && isMethodCall:
-                    names.Add(methodCall.getNameAsString());
-                    var callScope = methodCall.getScope().FromOptional<Expression>();
-                    if (callScope is null)
-                    {
-                        names.Reverse();
-                        return names;
-                    }
-
-                    current = callScope;
-                    break;
-
-                case FieldAccessExpr fieldAccess:
-                    names.Add(fieldAccess.getNameAsString());
-                    current = fieldAccess.getScope();
-                    break;
-
-                case NameExpr nameExpr:
-                    names.Add(nameExpr.getNameAsString());
-                    names.Reverse();
-                    return names;
-
-                default:
-                    return null;
-            }
-
-            first = false;
-        }
-    }
-
     private static MappingResolutionStatus ResolveChain(
         ConversionContext context,
         TypeMappingIndex index,
@@ -346,6 +350,14 @@ public static class TypeMappingResolver
             return false;
         }
 
+        // Namespace-gated: skip if this file has no mapped packages
+        var fileCtx = context.FileMappingContext;
+        if (fileCtx is not null && !fileCtx.HasAnyMappedPackage)
+        {
+            converted = javaType;
+            return false;
+        }
+
         var applied = false;
         converted = QualifiedTypeNameRegex.Replace(javaType, match =>
         {
@@ -447,9 +459,9 @@ public static class TypeMappingResolver
         // argument types are known, then fall back to the single entry without a type_hint.
         if (callArgs is not null)
         {
-            var inferred = callArgs.OfType<Expression>().Select(InferArgType).ToList();
+            var inferred = callArgs.OfType<Expression>().Select(ArgumentTypeInferrer.InferArgType).ToList();
             var matched = candidates
-                .Where(c => c.TypeHint is not null && TypeHintMatches(c.TypeHint, inferred))
+                .Where(c => c.TypeHint is not null && ArgumentTypeInferrer.TypeHintMatches(c.TypeHint, inferred))
                 .ToList();
             if (matched.Count == 1)
             {
@@ -644,58 +656,6 @@ public static class TypeMappingResolver
             syntax = SyntaxFactory.IdentifierName(filled);
             return false;
         }
-    }
-
-    private static string? InferArgType(Expression arg) => arg switch
-    {
-        IntegerLiteralExpr => "int",
-        LongLiteralExpr => "long",
-        DoubleLiteralExpr => "double",
-        BooleanLiteralExpr => "boolean",
-        CharLiteralExpr => "char",
-        StringLiteralExpr => "String",
-        NullLiteralExpr => null,
-        NameExpr name => name.getNameAsString(),
-        ObjectCreationExpr creation => creation.getType().getNameAsString(),
-        CastExpr cast => cast.getType().toString(),
-        UnaryExpr unary => InferArgType(unary.getExpression()),
-        _ => null,
-    };
-
-    private static bool TypeHintMatches(IReadOnlyList<string>? hint, List<string?> inferred)
-    {
-        if (hint is null || hint.Count != inferred.Count)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < hint.Count; i++)
-        {
-            var actual = inferred[i];
-            if (actual is null)
-            {
-                continue;
-            }
-
-            if (!TypeNamesEqual(hint[i], actual))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static bool TypeNamesEqual(string a, string b)
-    {
-        if (string.Equals(a, b, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        var aSimple = a.Contains('.') ? a[(a.LastIndexOf('.') + 1)..] : a;
-        var bSimple = b.Contains('.') ? b[(b.LastIndexOf('.') + 1)..] : b;
-        return string.Equals(aSimple, bSimple, StringComparison.OrdinalIgnoreCase);
     }
 
     private static MemberAccessExpressionSyntax MemberAccess(ExpressionSyntax scope, string member)

@@ -27,25 +27,12 @@ public class ConstructorDeclarationVisitor : BodyDeclarationVisitor<ConstructorD
 
         var mods = ctorDecl.getModifiers().ToModifierKeywordSet();
 
-        if (mods.Contains(Modifier.Keyword.PUBLIC))
-            ctorSyntax = ctorSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword));
-        if (mods.Contains(Modifier.Keyword.PROTECTED))
-            ctorSyntax = ctorSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.ProtectedKeyword));
-        if (mods.Contains(Modifier.Keyword.PRIVATE))
-            ctorSyntax = ctorSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword));
+        ctorSyntax = ModifierHelper.AddAccessModifiers(ctorSyntax, mods);
 
         // Java's package-private default on a nested class constructor means it is
         // accessible from the enclosing class. In C# a modifier-less constructor on a
         // public nested class is private, so promote it.
-        if (context.RootTypeName is not null
-            && context.LastTypeName is not null
-            && context.RootTypeName != context.LastTypeName
-            && !mods.Contains(Modifier.Keyword.PUBLIC)
-            && !mods.Contains(Modifier.Keyword.PROTECTED)
-            && !mods.Contains(Modifier.Keyword.PRIVATE))
-        {
-            ctorSyntax = ctorSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword));
-        }
+        ctorSyntax = ModifierHelper.PromoteNestedPackagePrivate(ctorSyntax, context, mods);
 
         var parameters = ctorDecl.getParameters().ToList<Parameter>() ?? [];
 

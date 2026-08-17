@@ -153,6 +153,30 @@ public static partial class JavaToCSharpConverter
         var imports = result.getImports()?.ToList<ImportDeclaration>() ?? [];
         var package = result.getPackageDeclaration().FromOptional<PackageDeclaration>();
 
+        // Pre-scan: build the file-level mapping context for namespace-gated mapping resolution
+        if (options.MappingIndex is not null)
+        {
+            var importNames = imports
+                .Where(i => !i.isStatic())
+                .Select(i => i.getNameAsString())
+                .ToList();
+
+            // Add the file's own package as active (types in the same package are always available)
+            if (package is not null)
+            {
+                var pkgName = package.getNameAsString();
+                if (!string.IsNullOrEmpty(pkgName))
+                {
+                    importNames.Add(pkgName + ".*");
+                }
+            }
+
+            context.FileMappingContext = new TypeMapping.FileMappingContext(
+                options.MappingIndex,
+                importNames,
+                options.AutoImportedJavaPackages);
+        }
+
         var rootMembers = new List<MemberDeclarationSyntax>();
         NameSyntax? namespaceNameSyntax = null;
 

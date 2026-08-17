@@ -99,16 +99,9 @@ public class MethodDeclarationVisitor : BodyDeclarationVisitor<MethodDeclaration
 
         var mods = methodDecl.getModifiers().ToModifierKeywordSet();
 
-        if (mods.Contains(Modifier.Keyword.PUBLIC))
-            methodSyntax = methodSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword));
-        if (mods.Contains(Modifier.Keyword.PROTECTED))
-            methodSyntax = methodSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.ProtectedKeyword));
-        if (mods.Contains(Modifier.Keyword.PRIVATE))
-            methodSyntax = methodSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword));
-        if (mods.Contains(Modifier.Keyword.STATIC))
-            methodSyntax = methodSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.StaticKeyword));
-        if (mods.Contains(Modifier.Keyword.ABSTRACT))
-            methodSyntax = methodSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.AbstractKeyword));
+        methodSyntax = ModifierHelper.AddAccessModifiers(methodSyntax, mods);
+        methodSyntax = ModifierHelper.AddNonAccessModifiers(methodSyntax, mods,
+            mapStatic: true, mapAbstract: true);
 
         var annotations = methodDecl.getAnnotations().ToList<AnnotationExpr>();
         bool isOverride = false;
@@ -133,13 +126,13 @@ public class MethodDeclarationVisitor : BodyDeclarationVisitor<MethodDeclaration
                         isOverride = true;
                     }
                 }
-                // add annotation if a mapping is found
-                else if (context.Options is not null && context.Options.SyntaxMappings.AnnotationMappings.TryGetValue(name, out var mappedAnnotation))
+                else if (name == "Deprecated")
                 {
-                    var attributeList = SyntaxFactory.AttributeList(
-                        SyntaxFactory.SingletonSeparatedList(
-                            SyntaxFactory.Attribute(SyntaxFactory.ParseName(mappedAnnotation))));
-                    methodSyntax = methodSyntax.AddAttributeLists(attributeList);
+                    var obsoleteAttr = AnnotationHelper.ConvertDeprecatedToObsolete(annotation);
+                    if (obsoleteAttr is not null)
+                    {
+                        methodSyntax = methodSyntax.AddAttributeLists(obsoleteAttr);
+                    }
                 }
             }
         }

@@ -31,29 +31,6 @@ public class MethodCallExpressionVisitor : ExpressionVisitor<MethodCallExpr>
         if (scope is not null)
         {
             scopeSyntax = VisitExpression(context, scope);
-
-            if (context.Options.ConvertSystemOutToConsole
-                && scope is FieldAccessExpr fieldAccessExpr
-                && fieldAccessExpr.getScope() is NameExpr nameExpr
-                && nameExpr.getNameAsString() == "System"
-                && fieldAccessExpr.getNameAsString() == "out"
-                && scopeSyntax is IdentifierNameSyntax { Identifier: { Text: "Console" } })
-            {
-                if (methodCallExpr.getNameAsString() == "println")
-                {
-                    methodName = "WriteLine";
-                }
-                else if (methodCallExpr.getNameAsString() == "print")
-                {
-                    methodName = "Write";
-                }
-            }
-        }
-
-        // Override methodName if a mapping is found
-        if (TryGetMappedMethodName(methodCallExpr.getNameAsString(), scope, context, out var mappedMethodName))
-        {
-            methodName = mappedMethodName;
         }
 
         // Chained method casing: when the scope is itself a method call and the mapping
@@ -197,22 +174,5 @@ public class MethodCallExpressionVisitor : ExpressionVisitor<MethodCallExpr>
 
         return SyntaxFactory.GenericName(methodName)
             .AddTypeArgumentListArguments(typeArgSyntaxes);
-    }
-
-    private static bool TryGetMappedMethodName(string methodName, Expression? scope, ConversionContext context, out string mappedMethodName)
-    {
-        var mappings = context.Options.SyntaxMappings;
-        if (scope is null && mappings.VoidMethodMappings.TryGetValue(methodName, out var voidMapping))
-        {
-            mappedMethodName = voidMapping;
-            return true;
-        }
-        else if (scope is not null && mappings.NonVoidMethodMappings.TryGetValue(methodName, out var nonVoidMapping))
-        {
-            mappedMethodName = nonVoidMapping;
-            return true;
-        }
-        mappedMethodName = methodName;
-        return false;
     }
 }

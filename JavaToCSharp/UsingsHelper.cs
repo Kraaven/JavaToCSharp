@@ -23,17 +23,8 @@ public static class UsingsHelper
                                                  importName[..lastPartStartIndex];
             var nameSpace = TypeHelper.Capitalize(importNameWithoutClassName);
 
-            // Override namespace if a non empty mapping is found (mapping to empty string removes the import)
-            if (options is not null && options.SyntaxMappings.ImportMappings.TryGetValue(importName, out var mappedNamespace))
-            {
-                if (string.IsNullOrEmpty(mappedNamespace))
-                {
-                    continue;
-                }
-                nameSpace = mappedNamespace;
-            }
-            // Otherwise derive the namespace from the mapping index's package-to-namespace rows.
-            else if (options?.MappingIndex is not null
+            // Derive the namespace from the mapping index's package-to-namespace rows.
+            if (options?.MappingIndex is not null
                      && options.MappingIndex.TryGetCSharpPackages(importNameWithoutClassName, out var csharpPackages))
             {
                 nameSpace = csharpPackages[0];

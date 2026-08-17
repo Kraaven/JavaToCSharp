@@ -72,31 +72,14 @@ public class FieldDeclarationVisitor : BodyDeclarationVisitor<FieldDeclaration>
 
         var mods = fieldDecl.getModifiers().ToModifierKeywordSet();
 
-        if (mods.Contains(Modifier.Keyword.PUBLIC))
-            fieldSyntax = fieldSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword));
-        if (mods.Contains(Modifier.Keyword.PROTECTED))
-            fieldSyntax = fieldSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.ProtectedKeyword));
-        if (mods.Contains(Modifier.Keyword.PRIVATE))
-            fieldSyntax = fieldSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword));
-        if (mods.Contains(Modifier.Keyword.STATIC))
-            fieldSyntax = fieldSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.StaticKeyword));
-        if (mods.Contains(Modifier.Keyword.FINAL))
-            fieldSyntax = fieldSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword));
-        if (mods.Contains(Modifier.Keyword.VOLATILE))
-            fieldSyntax = fieldSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.VolatileKeyword));
+        fieldSyntax = ModifierHelper.AddAccessModifiers(fieldSyntax, mods);
+        fieldSyntax = ModifierHelper.AddNonAccessModifiers(fieldSyntax, mods,
+            mapStatic: true, mapFinalToReadOnly: true, mapVolatile: true);
 
         // Java's package-private default on a nested class field means it is
         // accessible from the enclosing class. In C# a modifier-less field on a
         // public nested class is private, so promote it.
-        if (context.RootTypeName is not null
-            && context.LastTypeName is not null
-            && context.RootTypeName != context.LastTypeName
-            && !mods.Contains(Modifier.Keyword.PUBLIC)
-            && !mods.Contains(Modifier.Keyword.PROTECTED)
-            && !mods.Contains(Modifier.Keyword.PRIVATE))
-        {
-            fieldSyntax = fieldSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword));
-        }
+        fieldSyntax = ModifierHelper.PromoteNestedPackagePrivate(fieldSyntax, context, mods);
 
         return fieldSyntax;
     }

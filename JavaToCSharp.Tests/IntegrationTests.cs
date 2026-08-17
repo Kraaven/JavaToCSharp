@@ -79,7 +79,13 @@ public class IntegrationTests(ITestOutputHelper testOutputHelper)
     {
         var options = new JavaConversionOptions
         {
-            ConvertSystemOutToConsole = true,
+            MappingIndex = TypeMapping.BuiltInMappings.Load(
+                TypeMapping.BuiltInMappingSpec.Console,
+                TypeMapping.BuiltInMappingSpec.System,
+                TypeMapping.BuiltInMappingSpec.SystemCollections,
+                TypeMapping.BuiltInMappingSpec.SystemIO,
+                TypeMapping.BuiltInMappingSpec.SystemThreading,
+                TypeMapping.BuiltInMappingSpec.SystemText),
             IncludeComments = false,
             PreserveJavaMethodNames = false,
         };
@@ -275,6 +281,76 @@ public class IntegrationTests(ITestOutputHelper testOutputHelper)
         return node.ChildNodes()
             .Select(FindLiteralExpressionSyntax)
             .FirstOrDefault(childLiteral => childLiteral != null);
+    }
+
+    [Fact]
+    public void Deprecated_Bare_Attribute_On_Class_Generates_Obsolete()
+    {
+        const string javaCode = """
+            @Deprecated
+            public class OldClass {
+                public void doStuff() {}
+            }
+
+            """;
+
+        var result = JavaToCSharpConverter.ConvertText(javaCode);
+        var csText = result.ConvertedText ?? "";
+
+        Assert.Contains("[Obsolete", csText);
+    }
+
+    [Fact]
+    public void Deprecated_With_Since_On_Method_Generates_Obsolete_Message()
+    {
+        const string javaCode = """
+            public class OldClass {
+                @Deprecated(since = "17")
+                public void oldMethod() {}
+            }
+
+            """;
+
+        var result = JavaToCSharpConverter.ConvertText(javaCode);
+        var csText = result.ConvertedText ?? "";
+
+        Assert.Contains("Obsolete(\"17\")", csText);
+    }
+
+    [Fact]
+    public void Deprecated_ForRemoval_On_Method_Generates_Obsolete_Error()
+    {
+        const string javaCode = """
+            public class OldClass {
+                @Deprecated(forRemoval = true)
+                public void removedMethod() {}
+            }
+
+            """;
+
+        var result = JavaToCSharpConverter.ConvertText(javaCode);
+        var csText = result.ConvertedText ?? "";
+
+        Assert.Contains("[Obsolete", csText);
+        Assert.Contains("true", csText);
+    }
+
+    [Fact]
+    public void Deprecated_Both_Since_And_ForRemoval_On_Class()
+    {
+        const string javaCode = """
+            @Deprecated(since = "11", forRemoval = true)
+            public class OldClass {
+            }
+
+            """;
+
+        var result = JavaToCSharpConverter.ConvertText(javaCode);
+        var csText = result.ConvertedText ?? "";
+
+        Assert.Contains("[Obsolete", csText);
+        Assert.Contains("11", csText);
+        Assert.Contains("true", csText);
     }
 
     private class Expectation

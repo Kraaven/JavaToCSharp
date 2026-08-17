@@ -32,6 +32,13 @@ public sealed partial class TypeMappingIndex
     public IReadOnlyCollection<ClassMapping> Classes => [.. _byQualifiedName.Values];
 
     /// <summary>
+    /// All Java-package → C#-namespace mappings. Each key is a Java package prefix and each
+    /// value is the corresponding set of C# namespaces. Used by <see cref="CopyToBuilder"/>
+    /// to reconstruct the namespace mapping layer.
+    /// </summary>
+    public IReadOnlyDictionary<string, string[]> NamespaceMappings => _csharpPackagesByPackage;
+
+    /// <summary>
     /// Loads and validates the given mapping files. Files are processed in a deterministic
     /// order (full path, ordinal) so identical inputs always produce the same index.
     /// </summary>

@@ -21,14 +21,6 @@ public class ObjectCreationExpressionVisitor : ExpressionVisitor<ObjectCreationE
             return VisitAnonymousClassCreationExpression(context, newExpr, anonBody);
         }
 
-        // TODO: what to do with scope?
-        //var scope = newExpr.getScope();
-        //ExpressionSyntax scopeSyntax = null;
-
-        //if (scope is not null) {
-        //    scopeSyntax = ExpressionVisitor.VisitExpression(context, scope);
-        //}
-
         var type = newExpr.getType();
 
         var typeSyntax = TypeHelper.GetSyntaxFromType(context, type);

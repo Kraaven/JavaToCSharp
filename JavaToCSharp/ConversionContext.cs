@@ -5,17 +5,26 @@ namespace JavaToCSharp;
 public class ConversionContext(
     JavaConversionOptions options,
     Action<ConversionState>? stateChanged = null,
-    Action<ConversionWarningEventArgs>? warning = null)
+    Action<ConversionWarningEventArgs>? warning = null,
+    IConversionLogger? logger = null)
 {
     private int _tempCounter;
 
     private readonly Action<ConversionState>? _stateChanged = stateChanged;
     private readonly Action<ConversionWarningEventArgs>? _warning = warning;
+    private readonly IConversionLogger? _logger = logger;
 
-    public void NotifyStateChanged(ConversionState state) => _stateChanged?.Invoke(state);
+    public void NotifyStateChanged(ConversionState state)
+    {
+        _stateChanged?.Invoke(state);
+        _logger?.OnStateChanged(state);
+    }
 
-    public void Warning(string message, int javaLineNumber) =>
+    public void Warning(string message, int javaLineNumber)
+    {
         _warning?.Invoke(new ConversionWarningEventArgs(message, javaLineNumber));
+        _logger?.OnWarning(message, javaLineNumber);
+    }
 
     public Queue<ClassDeclarationSyntax> PendingAnonymousTypes { get; } = new();
 
@@ -49,6 +58,13 @@ public class ConversionContext(
     }
 
     public JavaConversionOptions Options { get; } = options;
+
+    /// <summary>
+    /// Holds the set of Java packages that are actively imported in the current file.
+    /// When set, mapping resolution is gated on this context: only types from active packages
+    /// are resolved through the <see cref="TypeMapping.TypeMappingIndex"/>.
+    /// </summary>
+    internal TypeMapping.FileMappingContext? FileMappingContext { get; set; }
 
     public string? RootTypeName { get; set; }
 
@@ -98,57 +114,34 @@ public class ConversionContext(
         new Dictionary<string, string>(StringComparer.Ordinal);
 
     /// <summary>
-    /// Maps simple enum constant names to qualified names (e.g. MONDAY → Day.MONDAY)
+    /// Maps simple enum constant names to qualified names (e.g. MONDAY → Day.MONday)
     /// for switch labels and similar unqualified references.
     /// </summary>
     public IDictionary<string, string> EnumConstantsBySimpleName { get; } =
         new Dictionary<string, string>(StringComparer.Ordinal);
 
-    private readonly List<Dictionary<string, string>> _variableScopes = [];
+    /// <summary>
+    /// Tracks Java variable types through nested lexical scopes.
+    /// </summary>
+    public VariableScopeTracker VariableScopes { get; } = new();
 
     /// <summary>
     /// Enters a new lexical scope for variable-type tracking. Call <see cref="PopVariableScope"/>
     /// when the scope ends so shadowed names are restored.
     /// </summary>
-    public void PushVariableScope() =>
-        _variableScopes.Add(new Dictionary<string, string>(StringComparer.Ordinal));
+    public void PushVariableScope() => VariableScopes.PushScope();
 
-    public void PopVariableScope()
-    {
-        if (_variableScopes.Count > 0)
-        {
-            _variableScopes.RemoveAt(_variableScopes.Count - 1);
-        }
-    }
+    public void PopVariableScope() => VariableScopes.PopScope();
 
     /// <summary>
-    /// Records the declared Java type of a variable in the current scope. The stored value is the
-    /// raw declared type string (e.g. <c>Map&lt;String, Item&gt;</c> or <c>BufferedReader</c>).
+    /// Records the declared Java type of a variable in the current scope.
     /// </summary>
-    public void DeclareVariable(string name, string javaType)
-    {
-        if (_variableScopes.Count == 0)
-        {
-            PushVariableScope();
-        }
-
-        _variableScopes[^1][name] = javaType;
-    }
+    public void DeclareVariable(string name, string javaType) =>
+        VariableScopes.Declare(name, javaType);
 
     /// <summary>
     /// Looks up the declared Java type of a variable, innermost scope first.
     /// </summary>
-    public bool TryGetVariableType(string name, out string javaType)
-    {
-        for (int i = _variableScopes.Count - 1; i >= 0; i--)
-        {
-            if (_variableScopes[i].TryGetValue(name, out javaType!))
-            {
-                return true;
-            }
-        }
-
-        javaType = "";
-        return false;
-    }
+    public bool TryGetVariableType(string name, out string javaType) =>
+        VariableScopes.TryGetVariableType(name, out javaType);
 }

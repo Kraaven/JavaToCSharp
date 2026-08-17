@@ -79,12 +79,7 @@ public class EnumDeclarationVisitor : BodyDeclarationVisitor<EnumDeclaration>
 
         var mods = enumDecl.getModifiers().ToModifierKeywordSet();
 
-        if (mods.Contains(Modifier.Keyword.PRIVATE))
-            classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword));
-        if (mods.Contains(Modifier.Keyword.PROTECTED))
-            classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.ProtectedKeyword));
-        if (mods.Contains(Modifier.Keyword.PUBLIC))
-            classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword));
+        classSyntax = ModifierHelper.AddAccessModifiers(classSyntax, mods);
         if (isAbstract)
             classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.AbstractKeyword));
 
@@ -238,21 +233,23 @@ public class EnumDeclarationVisitor : BodyDeclarationVisitor<EnumDeclaration>
         }
 
         classSyntax = classSyntax.AddMembers(
-            CreateNameMethod(),
-            CreateOrdinalMethod(),
-            CreateEqualsMethod(),
-            CreateGetHashCodeMethod(),
-            CreateEqualityOperator(name),
-            CreateInequalityOperator(name));
+            EnumSyntaxHelpers.CreateNameMethod(),
+            EnumSyntaxHelpers.CreateOrdinalMethod(),
+            EnumSyntaxHelpers.CreateReferenceEqualsMethod(),
+            EnumSyntaxHelpers.CreateReferenceGetHashCodeMethod(),
+            EnumSyntaxHelpers.CreateReferenceEqualityOperator(name),
+            EnumSyntaxHelpers.CreateReferenceInequalityOperator(name));
 
         foreach (var method in convertedMethods)
         {
             classSyntax = classSyntax.AddMembers(method);
         }
 
+        var constantNames = entries.Select(e => e.getNameAsString()).ToList();
+
         classSyntax = classSyntax.AddMembers(
-            CreateValuesMethod(enumTypeSyntax, entries),
-            CreateValueOfMethod(name, enumTypeSyntax, entries));
+            EnumSyntaxHelpers.CreateValuesMethod(enumTypeSyntax, constantNames),
+            EnumSyntaxHelpers.CreateValueOfMethod(enumTypeSyntax, name, constantNames));
 
         for (int ordinal = 0; ordinal < entries.Count; ordinal++)
         {
@@ -387,207 +384,6 @@ public class EnumDeclarationVisitor : BodyDeclarationVisitor<EnumDeclaration>
                 SyntaxKind.SimpleAssignmentExpression,
                 SyntaxFactory.IdentifierName(fieldName),
                 SyntaxFactory.IdentifierName(paramName)));
-    }
-
-    private static MethodDeclarationSyntax CreateNameMethod()
-    {
-        return SyntaxFactory.MethodDeclaration(
-                SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.StringKeyword)),
-                "name")
-            .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword))
-            .WithExpressionBody(
-                SyntaxFactory.ArrowExpressionClause(SyntaxFactory.IdentifierName("_name")))
-            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
-    }
-
-    private static MethodDeclarationSyntax CreateOrdinalMethod()
-    {
-        return SyntaxFactory.MethodDeclaration(
-                SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.IntKeyword)),
-                "ordinal")
-            .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword))
-            .WithExpressionBody(
-                SyntaxFactory.ArrowExpressionClause(SyntaxFactory.IdentifierName("_ordinal")))
-            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
-    }
-
-    private static MethodDeclarationSyntax CreateEqualsMethod()
-    {
-        return SyntaxFactory.MethodDeclaration(
-                SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.BoolKeyword)),
-                "Equals")
-            .AddModifiers(
-                SyntaxFactory.Token(SyntaxKind.PublicKeyword),
-                SyntaxFactory.Token(SyntaxKind.OverrideKeyword))
-            .AddParameterListParameters(
-                SyntaxFactory.Parameter(SyntaxFactory.Identifier("obj"))
-                    .WithType(SyntaxFactory.NullableType(
-                        SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.ObjectKeyword)))))
-            .WithExpressionBody(
-                SyntaxFactory.ArrowExpressionClause(
-                    SyntaxFactory.InvocationExpression(SyntaxFactory.IdentifierName("ReferenceEquals"))
-                        .WithArgumentList(
-                            SyntaxFactory.ArgumentList(
-                                SyntaxFactory.SeparatedList(new[]
-                                {
-                                    SyntaxFactory.Argument(SyntaxFactory.ThisExpression()),
-                                    SyntaxFactory.Argument(SyntaxFactory.IdentifierName("obj"))
-                                })))))
-            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
-    }
-
-    private static MethodDeclarationSyntax CreateGetHashCodeMethod()
-    {
-        // Identity hash to stay consistent with ReferenceEquals-based Equals / ==
-        return SyntaxFactory.MethodDeclaration(
-                SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.IntKeyword)),
-                "GetHashCode")
-            .AddModifiers(
-                SyntaxFactory.Token(SyntaxKind.PublicKeyword),
-                SyntaxFactory.Token(SyntaxKind.OverrideKeyword))
-            .WithExpressionBody(
-                SyntaxFactory.ArrowExpressionClause(
-                    SyntaxFactory.InvocationExpression(
-                            SyntaxFactory.MemberAccessExpression(
-                                SyntaxKind.SimpleMemberAccessExpression,
-                                SyntaxFactory.ParseName("System.Runtime.CompilerServices.RuntimeHelpers"),
-                                SyntaxFactory.IdentifierName("GetHashCode")))
-                        .WithArgumentList(
-                            SyntaxFactory.ArgumentList(
-                                SyntaxFactory.SingletonSeparatedList(
-                                    SyntaxFactory.Argument(SyntaxFactory.ThisExpression()))))))
-            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
-    }
-
-    private static OperatorDeclarationSyntax CreateEqualityOperator(string enumName)
-    {
-        var typeSyntax = SyntaxFactory.NullableType(SyntaxFactory.ParseTypeName(enumName));
-        return SyntaxFactory.OperatorDeclaration(
-                SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.BoolKeyword)),
-                SyntaxFactory.Token(SyntaxKind.EqualsEqualsToken))
-            .AddModifiers(
-                SyntaxFactory.Token(SyntaxKind.PublicKeyword),
-                SyntaxFactory.Token(SyntaxKind.StaticKeyword))
-            .AddParameterListParameters(
-                SyntaxFactory.Parameter(SyntaxFactory.Identifier("a")).WithType(typeSyntax),
-                SyntaxFactory.Parameter(SyntaxFactory.Identifier("b")).WithType(typeSyntax))
-            .WithExpressionBody(
-                SyntaxFactory.ArrowExpressionClause(
-                    SyntaxFactory.InvocationExpression(SyntaxFactory.IdentifierName("ReferenceEquals"))
-                        .WithArgumentList(
-                            SyntaxFactory.ArgumentList(
-                                SyntaxFactory.SeparatedList(new[]
-                                {
-                                    SyntaxFactory.Argument(SyntaxFactory.IdentifierName("a")),
-                                    SyntaxFactory.Argument(SyntaxFactory.IdentifierName("b"))
-                                })))))
-            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
-    }
-
-    private static OperatorDeclarationSyntax CreateInequalityOperator(string enumName)
-    {
-        var typeSyntax = SyntaxFactory.NullableType(SyntaxFactory.ParseTypeName(enumName));
-        return SyntaxFactory.OperatorDeclaration(
-                SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.BoolKeyword)),
-                SyntaxFactory.Token(SyntaxKind.ExclamationEqualsToken))
-            .AddModifiers(
-                SyntaxFactory.Token(SyntaxKind.PublicKeyword),
-                SyntaxFactory.Token(SyntaxKind.StaticKeyword))
-            .AddParameterListParameters(
-                SyntaxFactory.Parameter(SyntaxFactory.Identifier("a")).WithType(typeSyntax),
-                SyntaxFactory.Parameter(SyntaxFactory.Identifier("b")).WithType(typeSyntax))
-            .WithExpressionBody(
-                SyntaxFactory.ArrowExpressionClause(
-                    SyntaxFactory.PrefixUnaryExpression(
-                        SyntaxKind.LogicalNotExpression,
-                        SyntaxFactory.InvocationExpression(SyntaxFactory.IdentifierName("ReferenceEquals"))
-                            .WithArgumentList(
-                                SyntaxFactory.ArgumentList(
-                                    SyntaxFactory.SeparatedList(new[]
-                                    {
-                                        SyntaxFactory.Argument(SyntaxFactory.IdentifierName("a")),
-                                        SyntaxFactory.Argument(SyntaxFactory.IdentifierName("b"))
-                                    }))))))
-            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
-    }
-
-    private static MethodDeclarationSyntax CreateValuesMethod(
-        TypeSyntax enumTypeSyntax,
-        IReadOnlyList<EnumConstantDeclaration> entries)
-    {
-        var arrayType = SyntaxFactory.ArrayType(enumTypeSyntax)
-            .AddRankSpecifiers(
-                SyntaxFactory.ArrayRankSpecifier(
-                    SyntaxFactory.SingletonSeparatedList<ExpressionSyntax>(
-                        SyntaxFactory.OmittedArraySizeExpression())));
-
-        var initials = entries
-            .Select(e => (ExpressionSyntax)SyntaxFactory.IdentifierName(e.getNameAsString()))
-            .ToArray();
-
-        var arrayCreation = SyntaxFactory.ArrayCreationExpression(arrayType)
-            .WithInitializer(
-                SyntaxFactory.InitializerExpression(
-                    SyntaxKind.ArrayInitializerExpression,
-                    SyntaxFactory.SeparatedList(initials)));
-
-        return SyntaxFactory.MethodDeclaration(arrayType, "values")
-            .AddModifiers(
-                SyntaxFactory.Token(SyntaxKind.PublicKeyword),
-                SyntaxFactory.Token(SyntaxKind.StaticKeyword))
-            .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(arrayCreation))
-            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
-    }
-
-    private static MethodDeclarationSyntax CreateValueOfMethod(
-        string enumName,
-        TypeSyntax enumTypeSyntax,
-        IReadOnlyList<EnumConstantDeclaration> entries)
-    {
-        StatementSyntax? elseStatement = SyntaxFactory.ThrowStatement(
-            SyntaxFactory.ObjectCreationExpression(
-                    SyntaxFactory.ParseTypeName("ArgumentException"))
-                .WithArgumentList(
-                    SyntaxFactory.ArgumentList(
-                        SyntaxFactory.SingletonSeparatedList(
-                            SyntaxFactory.Argument(
-                                SyntaxFactory.InterpolatedStringExpression(
-                                    SyntaxFactory.Token(SyntaxKind.InterpolatedStringStartToken),
-                                    SyntaxFactory.List(new InterpolatedStringContentSyntax[]
-                                    {
-                                        SyntaxFactory.InterpolatedStringText(
-                                            SyntaxFactory.Token(
-                                                SyntaxTriviaList.Empty,
-                                                SyntaxKind.InterpolatedStringTextToken,
-                                                $"No enum constant {enumName}.",
-                                                $"No enum constant {enumName}.",
-                                                SyntaxTriviaList.Empty)),
-                                        SyntaxFactory.Interpolation(SyntaxFactory.IdentifierName("name"))
-                                    })))))));
-
-        for (int i = entries.Count - 1; i >= 0; i--)
-        {
-            string constantName = entries[i].getNameAsString();
-            var body = SyntaxFactory.Block(
-                SyntaxFactory.ReturnStatement(SyntaxFactory.IdentifierName(constantName)));
-            var condition = SyntaxFactory.BinaryExpression(
-                SyntaxKind.EqualsExpression,
-                SyntaxFactory.IdentifierName("name"),
-                SyntaxFactory.LiteralExpression(
-                    SyntaxKind.StringLiteralExpression,
-                    SyntaxFactory.Literal(constantName)));
-
-            elseStatement = SyntaxFactory.IfStatement(condition, body, SyntaxFactory.ElseClause(elseStatement));
-        }
-
-        return SyntaxFactory.MethodDeclaration(enumTypeSyntax, "valueOf")
-            .AddModifiers(
-                SyntaxFactory.Token(SyntaxKind.PublicKeyword),
-                SyntaxFactory.Token(SyntaxKind.StaticKeyword))
-            .AddParameterListParameters(
-                SyntaxFactory.Parameter(SyntaxFactory.Identifier("name"))
-                    .WithType(SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.StringKeyword))))
-            .WithBody(SyntaxFactory.Block(elseStatement));
     }
 
     private static ClassDeclarationSyntax CreateConstantNestedClass(

@@ -182,6 +182,11 @@ public static class TypeHelper
         return name;
     }
 
+    /// <summary>
+    /// Replaces well-known Java method names with their C# equivalents
+    /// (e.g. <c>hashCode</c> → <c>GetHashCode</c>, <c>equals</c> → <c>Equals</c>).
+    /// This is core translation behavior, not a mapping operation.
+    /// </summary>
     public static string ReplaceCommonMethodNames(string name)
     {
         return name.ToLower() switch {
@@ -195,7 +200,7 @@ public static class TypeHelper
             "trim" => "Trim",
             "readline" => "ReadLine",
             "read" => "Read",
-            "ready" => "EndOfStream",  // handled as property below
+            "ready" => "EndOfStream",
             "getmessage" => "Message",
             "abs" => "Abs",
             "compareto" => "CompareTo",
@@ -206,6 +211,7 @@ public static class TypeHelper
     /// <summary>
     /// Normalizes common Java field names to their C# equivalents
     /// (e.g. <c>length</c> → <c>Length</c>).
+    /// This is core translation behavior, not a mapping operation.
     /// </summary>
     public static string ReplaceCommonFieldNames(string name)
     {

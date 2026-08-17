@@ -115,12 +115,7 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
 
         var mods = recordDecl.getModifiers().ToModifierKeywordSet();
 
-        if (mods.Contains(Modifier.Keyword.PRIVATE))
-            classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword));
-        if (mods.Contains(Modifier.Keyword.PROTECTED))
-            classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.ProtectedKeyword));
-        if (mods.Contains(Modifier.Keyword.PUBLIC))
-            classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword));
+        classSyntax = ModifierHelper.AddAccessModifiers(classSyntax, mods);
 
         // Records are implicitly final
         classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.SealedKeyword));

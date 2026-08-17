@@ -24,16 +24,6 @@ public class FieldAccessExpressionVisitor : ExpressionVisitor<FieldAccessExpr>
         if (scope is not null)
         {
             scopeSyntax = VisitExpression(context, scope);
-
-            // TODO.PI: This should probably live in TypeHelper somehow
-            if (context.Options.ConvertSystemOutToConsole)
-            {
-                if (scopeSyntax is IdentifierNameSyntax { Identifier.Text: "System" }
-                    && fieldAccessExpr.getNameAsString() == "out")
-                {
-                    return SyntaxFactory.IdentifierName("Console");
-                }
-            }
         }
 
         if (scopeSyntax is null)

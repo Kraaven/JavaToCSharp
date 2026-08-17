@@ -158,6 +158,20 @@ public sealed class ClassMappingBuilder
     /// <summary>The bare C# type name this class maps to.</summary>
     public string CSharpClass => _csharpClass;
 
+    /// <summary>Sets whether this class mapping represents a generic type.</summary>
+    internal ClassMappingBuilder SetGeneric(bool isGeneric)
+    {
+        _dto.Generic = isGeneric ? true : null;
+        return this;
+    }
+
+    /// <summary>Sets the kind of this class mapping (class, interface, exception).</summary>
+    internal ClassMappingBuilder SetKind(ClassMappingKind kind)
+    {
+        _dto.Kind = kind == ClassMappingKind.Class ? null : kind.ToString().ToLowerInvariant();
+        return this;
+    }
+
     /// <summary>Maps a method to a renamed method with the same call shape: <c>Math.pow(a, b)</c>
     /// → <c>Math.Pow(a, b)</c>.</summary>
     public ClassMappingBuilder Rename(
