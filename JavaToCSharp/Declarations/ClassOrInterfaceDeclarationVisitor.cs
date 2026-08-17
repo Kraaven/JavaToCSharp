@@ -65,7 +65,7 @@ public class ClassOrInterfaceDeclarationVisitor : BodyDeclarationVisitor<ClassOr
         {
             foreach (var extend in extends)
             {
-                classSyntax = classSyntax.AddBaseListTypes(SyntaxFactory.SimpleBaseType(TypeHelper.GetSyntaxFromType(extend)));
+                classSyntax = classSyntax.AddBaseListTypes(SyntaxFactory.SimpleBaseType(TypeHelper.GetSyntaxFromType(context, extend)));
             }
         }
 
@@ -75,7 +75,7 @@ public class ClassOrInterfaceDeclarationVisitor : BodyDeclarationVisitor<ClassOr
         {
             foreach (var implement in implements)
             {
-                classSyntax = classSyntax.AddBaseListTypes(SyntaxFactory.SimpleBaseType(TypeHelper.GetSyntaxFromType(implement)));
+                classSyntax = classSyntax.AddBaseListTypes(SyntaxFactory.SimpleBaseType(TypeHelper.GetSyntaxFromType(context, implement)));
             }
         }
 
@@ -83,15 +83,24 @@ public class ClassOrInterfaceDeclarationVisitor : BodyDeclarationVisitor<ClassOr
 
         if (members is not null)
         {
-            foreach (var member in members)
-            {
-                var syntax = VisitBodyDeclarationForInterface(context, classSyntax, member);
-                var memberWithComments = syntax?.WithJavaComments(context, member);
+            context.PushVariableScope();
 
-                if (memberWithComments is not null)
+            try
+            {
+                foreach (var member in members)
                 {
-                    classSyntax = classSyntax.AddMembers(memberWithComments);
+                    var syntax = VisitBodyDeclarationForInterface(context, classSyntax, member);
+                    var memberWithComments = syntax?.WithJavaComments(context, member);
+
+                    if (memberWithComments is not null)
+                    {
+                        classSyntax = classSyntax.AddMembers(memberWithComments);
+                    }
                 }
+            }
+            finally
+            {
+                context.PopVariableScope();
             }
         }
 
@@ -134,57 +143,77 @@ public class ClassOrInterfaceDeclarationVisitor : BodyDeclarationVisitor<ClassOr
         if (mods.Contains(Modifier.Keyword.FINAL))
             classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.SealedKeyword));
 
+        // Java's package-private default has no access modifier keyword. In C# nested classes
+        // default to private, which makes their members inaccessible from the enclosing class.
+        // Promote modifier-less nested classes to public so they remain usable.
+        if (isNested
+            && !mods.Contains(Modifier.Keyword.PRIVATE)
+            && !mods.Contains(Modifier.Keyword.PROTECTED)
+            && !mods.Contains(Modifier.Keyword.PUBLIC))
+        {
+            classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword));
+        }
+
         var extends = classDecl.getExtendedTypes().ToList<ClassOrInterfaceType>() ?? [];
 
         foreach (var extend in extends)
         {
-            classSyntax = classSyntax.AddBaseListTypes(SyntaxFactory.SimpleBaseType(TypeHelper.GetSyntaxFromType(extend)));
+            classSyntax = classSyntax.AddBaseListTypes(SyntaxFactory.SimpleBaseType(TypeHelper.GetSyntaxFromType(context, extend)));
         }
 
         var implements = classDecl.getImplementedTypes().ToList<ClassOrInterfaceType>() ?? [];
 
         foreach (var implement in implements)
         {
-            classSyntax = classSyntax.AddBaseListTypes(SyntaxFactory.SimpleBaseType(TypeHelper.GetSyntaxFromType(implement)));
+            classSyntax = classSyntax.AddBaseListTypes(SyntaxFactory.SimpleBaseType(TypeHelper.GetSyntaxFromType(context, implement)));
         }
 
         var members = classDecl.getMembers()?.ToList<BodyDeclaration>();
 
         if (members is not null)
         {
-            foreach (var member in members)
-            {
-                if (member is ClassOrInterfaceDeclaration childType)
-                {
-                    if (childType.isInterface())
-                    {
-                        var childInt = VisitInterfaceDeclaration(context, childType, true);
+            context.PushVariableScope();
 
-                        classSyntax = classSyntax.AddMembers(childInt);
+            try
+            {
+                foreach (var member in members)
+                {
+                    if (member is ClassOrInterfaceDeclaration childType)
+                    {
+                        if (childType.isInterface())
+                        {
+                            var childInt = VisitInterfaceDeclaration(context, childType, true);
+
+                            classSyntax = classSyntax.AddMembers(childInt);
+                        }
+                        else
+                        {
+                            var childClass = VisitClassDeclaration(context, childType, true);
+
+                            classSyntax = classSyntax.AddMembers(childClass);
+                        }
                     }
                     else
                     {
-                        var childClass = VisitClassDeclaration(context, childType, true);
+                        var syntax = VisitBodyDeclarationForClass(context, classSyntax, member, extends, implements);
+                        var withJavaComments = syntax?.WithJavaComments(context, member);
 
-                        classSyntax = classSyntax.AddMembers(childClass);
+                        if (withJavaComments is not null)
+                        {
+                            classSyntax = classSyntax.AddMembers(withJavaComments);
+                        }
                     }
-                }
-                else
-                {
-                    var syntax = VisitBodyDeclarationForClass(context, classSyntax, member, extends, implements);
-                    var withJavaComments = syntax?.WithJavaComments(context, member);
 
-                    if (withJavaComments is not null)
+                    while (context.PendingAnonymousTypes.Count > 0)
                     {
-                        classSyntax = classSyntax.AddMembers(withJavaComments);
+                        var anon = context.PendingAnonymousTypes.Dequeue();
+                        classSyntax = classSyntax.AddMembers(anon);
                     }
                 }
-
-                while (context.PendingAnonymousTypes.Count > 0)
-                {
-                    var anon = context.PendingAnonymousTypes.Dequeue();
-                    classSyntax = classSyntax.AddMembers(anon);
-                }
+            }
+            finally
+            {
+                context.PopVariableScope();
             }
         }
 

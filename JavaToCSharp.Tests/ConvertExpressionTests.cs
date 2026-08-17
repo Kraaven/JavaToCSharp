@@ -7,10 +7,10 @@ namespace JavaToCSharp.Tests;
 public class ConvertExpressionTests
 {
     [Theory]
-    [InlineData("lst.size()", "lst.Count")]
-    [InlineData("lst.get(i)", "lst[i]")]
-    [InlineData("lst.set(i, value)", "lst[i] = value")]
-    [InlineData("str.length()", "str.Length")]
+    [InlineData("lst.size()", "lst.Size()")]
+    [InlineData("lst.get(i)", "lst.Get(i)")]
+    [InlineData("lst.set(i, value)", "lst.Set(i,value)")]
+    [InlineData("str.length()", "str.Length()")]
     [InlineData("arr.length", "arr.Length")]
 
     //Conversion not done if param number does not match the required

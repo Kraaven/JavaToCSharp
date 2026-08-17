@@ -1,4 +1,5 @@
 ﻿using System.Text.RegularExpressions;
+using JavaToCSharp.TypeMapping;
 
 namespace JavaToCSharp;
 
@@ -36,12 +37,13 @@ public class JavaConversionOptions
     public bool UseFileScopedNamespaces { get; set; }
 
     /// <summary>
-    /// When true (default), method, field and member names keep their original Java casing
-    /// and no Java-to-C# property transforms are applied (e.g. <c>size()</c> is not rewritten
-    /// to <c>Count</c>). This keeps individually converted files call-compatible with each
-    /// other across files. When false, method names are PascalCased and common Java calls
-    /// (<c>size()</c>, <c>get(i)</c>, <c>set(i, v)</c>, <c>length()</c>, <c>compare</c>)
-    /// are rewritten to C# properties/indexers.
+    /// When true (default), method and member names keep their original Java casing and no
+    /// capitalization is applied. This keeps individually converted files call-compatible with
+    /// each other across files. When false, method names are PascalCased and common Java method
+    /// names (<c>equals</c>, <c>hashCode</c>, <c>toString</c>, <c>getClass</c>, …) are replaced
+    /// with their C# equivalents. Java-to-C# property/indexer rewrites (such as <c>size()</c>
+    /// to <c>Count</c> or <c>length</c> to <c>Length</c>) are no longer performed automatically;
+    /// use a member mapping set (<see cref="MappingIndex"/>) for those.
     /// </summary>
     public bool PreserveJavaMethodNames { get; set; } = true;
 
@@ -108,6 +110,14 @@ public class JavaConversionOptions
     }
 
     public SyntaxMapping SyntaxMappings { get; set; } = new SyntaxMapping();
+
+    /// <summary>
+    /// An optional, pre-loaded member-level mapping set. When set, member access and method
+    /// call resolution runs against it first, and any matching entry overrides all default
+    /// conversions (including <see cref="PreserveJavaMethodNames"/>). Unmatched calls fall
+    /// through to the normal conversion logic. Instances are immutable and safe to share.
+    /// </summary>
+    public TypeMappingIndex? MappingIndex { get; set; }
 
     public JavaConversionOptions AddPackageReplacement(string pattern, string replacement, RegexOptions options = RegexOptions.None)
     {

@@ -60,6 +60,64 @@ public static class TypeHelper
     public static string ConvertType(string typeName)
         => TypeNameParser.ParseTypeName(typeName, s => _typeNameConversions.TryGetValue(s, out string? converted) ? converted : s);
 
+    /// <summary>
+    /// Converts a type name, first rewriting mapped names through <see cref="TypeMappingIndex"/>
+    /// (when configured) and then applying the built-in dictionary fallback. Mapped names override
+    /// the dictionary (e.g. <c>Map</c> → <c>IDictionary</c> instead of <c>Dictionary</c>).
+    /// </summary>
+    public static string ConvertType(ConversionContext context, string typeName)
+    {
+        if (context.Options.MappingIndex is not null)
+        {
+            TypeMapping.TypeMappingResolver.TryResolveTypeName(context, typeName, out var mapped);
+            return mapped;
+        }
+
+        return ConvertType(typeName);
+    }
+
+    public static string ConvertType(ConversionContext context, Type type)
+        => ConvertType(context, type.toString());
+
+    public static string ConvertTypeOf(ConversionContext context, Ast.nodeTypes.NodeWithType typedNode)
+        => ConvertType(context, typedNode.getType().toString());
+
+    public static TypeSyntax ConvertTypeSyntax(ConversionContext context, Type type, int arrayRank)
+    {
+        if (type is ArrayType arrayType)
+        {
+            if (arrayRank > 0 && arrayType.getArrayLevel() != arrayRank)
+            {
+                throw new ArgumentException("Given array rank does not match the array level of the type", nameof(arrayRank));
+            }
+
+            arrayRank = arrayType.getArrayLevel();
+            Type elementType;
+
+            while ((elementType = arrayType.getElementType()) is ArrayType nestedArrayType)
+            {
+                arrayType = nestedArrayType;
+            }
+
+            return ConvertTypeSyntax(context, elementType, arrayRank);
+        }
+
+        return arrayRank == 0
+            ? SyntaxFactory.ParseTypeName(ConvertType(context, type))
+            : ConvertArrayTypeSyntax(context, type, arrayRank);
+    }
+
+    public static ArrayTypeSyntax ConvertArrayTypeSyntax(ConversionContext context, Type type, int arrayRank)
+    {
+        var rankSpecifiers = SyntaxFactory.ArrayRankSpecifier(
+            SyntaxFactory.SeparatedList<ExpressionSyntax>(
+                Enumerable.Repeat(SyntaxFactory.OmittedArraySizeExpression(), arrayRank)
+            ));
+
+        return SyntaxFactory.ArrayType(ConvertTypeSyntax(context, type, 0))
+            .WithRankSpecifiers(SyntaxFactory.SingletonList(rankSpecifiers));
+    }
+
     public static TypeSyntax ConvertTypeSyntax(Type type, int arrayRank)
     {
         if (type is ArrayType arrayType)
@@ -134,6 +192,25 @@ public static class TypeHelper
             "tolowercase" => "ToLower",
             "equals" => "Equals",
             "tostring" => "ToString",
+            "trim" => "Trim",
+            "readline" => "ReadLine",
+            "read" => "Read",
+            "ready" => "EndOfStream",  // handled as property below
+            "getmessage" => "Message",
+            "abs" => "Abs",
+            "compareto" => "CompareTo",
+            _ => name,
+        };
+    }
+
+    /// <summary>
+    /// Normalizes common Java field names to their C# equivalents
+    /// (e.g. <c>length</c> → <c>Length</c>).
+    /// </summary>
+    public static string ReplaceCommonFieldNames(string name)
+    {
+        return name.ToLower() switch {
+            "length" => "Length",
             _ => name,
         };
     }
@@ -185,6 +262,30 @@ public static class TypeHelper
         return typeSyntax;
     }
 
+    /// <summary>
+    /// Builds a C# type syntax from a Java class/interface type, resolving the type name (and its
+    /// generic arguments) through the mapping index when configured.
+    /// </summary>
+    public static TypeSyntax GetSyntaxFromType(ConversionContext context, ClassOrInterfaceType type)
+    {
+        string typeName = ConvertType(context, type.getNameAsString());
+        var typeArgs = type.getTypeArguments().FromOptional<Ast.NodeList>()?.ToList<Type>();
+
+        TypeSyntax typeSyntax;
+
+        if (typeArgs is { Count: > 0 })
+        {
+            typeSyntax = SyntaxFactory.GenericName(typeName)
+                .AddTypeArgumentListArguments(typeArgs.Select(t => SyntaxFactory.ParseTypeName(ConvertType(context, t))).ToArray());
+        }
+        else
+        {
+            typeSyntax = SyntaxFactory.ParseTypeName(typeName);
+        }
+
+        return typeSyntax;
+    }
+
     public static ArgumentListSyntax GetSyntaxFromArguments(ConversionContext context, java.util.List args)
     {
         return SyntaxFactory.ArgumentList(GetSeparatedListFromArguments(context, args));
@@ -210,7 +311,9 @@ public static class TypeHelper
             argSyntaxes.Add(SyntaxFactory.Argument(argSyntax));
         }
 
-        var separators = Enumerable.Repeat(SyntaxFactory.Token(SyntaxKind.CommaToken), argSyntaxes.Count - 1);
+        var separators = argSyntaxes.Count == 0
+            ? Enumerable.Empty<SyntaxToken>()
+            : Enumerable.Repeat(SyntaxFactory.Token(SyntaxKind.CommaToken), argSyntaxes.Count - 1);
         return SyntaxFactory.SeparatedList(argSyntaxes, separators);
     }
 
@@ -242,142 +345,5 @@ public static class TypeHelper
         }
 
         return typeParameterConstraints;
-    }
-
-    /// <summary>
-    /// Transforms method calls into property and indexer accesses where appropriate.
-    /// </summary>
-    /// <param name="context">The conversion context.</param>
-    /// <param name="methodCallExpr">The <c>MethodCallExpr</c> to be transformed.</param>
-    /// <param name="transformedSyntax">The resulting transformed syntax.</param>
-    /// <returns><c>true</c> if the syntax was transformed, <c>false</c> otherwise</returns>
-    public static bool TryTransformMethodCall(ConversionContext context, MethodCallExpr methodCallExpr,
-        out ExpressionSyntax? transformedSyntax)
-    {
-        if (methodCallExpr.getScope().FromOptional<Expression>() is { } scope)
-        {
-            var methodName = methodCallExpr.getName();
-            var args = methodCallExpr.getArguments();
-
-            switch (methodName.getIdentifier())
-            {
-                case "length" when args.size() == 0:
-                {
-                    var scopeSyntaxLength = ExpressionVisitor.VisitExpression(context, scope);
-                    transformedSyntax = ReplaceMethodByProperty(scopeSyntaxLength, "Length");
-                    return true;
-                }
-
-                case "compare" when args.size() == 2
-                                    && scope is NameExpr nameExpr
-                                    && nameExpr.getNameAsString() is "Integer" or "Long" or "Double" or "Float"
-                                                                        or "Short" or "Byte" or "Boolean" or "Character":
-                {
-                    var compareArgs = args.OfType<Expression>().ToList();
-                    if (compareArgs.Count < 2)
-                    {
-                        transformedSyntax = null;
-                        return false;
-                    }
-
-                    var left = ExpressionVisitor.VisitExpression(context, compareArgs[0]);
-                    var right = ExpressionVisitor.VisitExpression(context, compareArgs[1]);
-                    if (left is null || right is null)
-                    {
-                        transformedSyntax = null;
-                        return false;
-                    }
-
-                    transformedSyntax = SyntaxFactory.InvocationExpression(
-                            SyntaxFactory.MemberAccessExpression(
-                                SyntaxKind.SimpleMemberAccessExpression,
-                                left,
-                                SyntaxFactory.IdentifierName("CompareTo")))
-                        .WithArgumentList(SyntaxFactory.ArgumentList(
-                            SyntaxFactory.SingletonSeparatedList(SyntaxFactory.Argument(right))));
-                    return true;
-                }
-
-                case "size" when args.size() == 0:
-                {
-                    var scopeSyntaxSize = ExpressionVisitor.VisitExpression(context, scope);
-                    transformedSyntax = ReplaceMethodByProperty(scopeSyntaxSize, "Count");
-                    return true;
-                }
-
-                case "get" when args.size() == 1:
-                {
-                    var scopeSyntaxGet = ExpressionVisitor.VisitExpression(context, scope);
-                    if (scopeSyntaxGet is null)
-                    {
-                        transformedSyntax = null;
-                        return false;
-                    }
-
-                    transformedSyntax = ReplaceGetByIndexAccess(context, scopeSyntaxGet, args);
-                    return true;
-                }
-
-                case "set" when args.size() == 2:
-                {
-                    var scopeSyntaxSet = ExpressionVisitor.VisitExpression(context, scope);
-                    if (scopeSyntaxSet is null)
-                    {
-                        transformedSyntax = null;
-                        return false;
-                    }
-
-                    transformedSyntax = ReplaceSetByIndexAccess(context, scopeSyntaxSet, args);
-                    return true;
-                }
-            }
-        }
-
-        transformedSyntax = null;
-        return false;
-
-        static MemberAccessExpressionSyntax? ReplaceMethodByProperty(ExpressionSyntax? scopeSyntax, string identifier)
-        {
-            if (scopeSyntax is null)
-            {
-                return null;
-            }
-
-            // Replace   expr.Size()   by   expr.Count
-            return SyntaxFactory.MemberAccessExpression(
-                SyntaxKind.SimpleMemberAccessExpression,
-                scopeSyntax,
-                SyntaxFactory.IdentifierName(SyntaxFactory.Identifier(identifier)));
-        }
-
-        static ExpressionSyntax ReplaceGetByIndexAccess(ConversionContext context, ExpressionSyntax scopeSyntax,
-            java.util.List args)
-        {
-            // Replace   expr.Get(i)   by   expr[i]
-            return SyntaxFactory.ElementAccessExpression(
-                scopeSyntax,
-                SyntaxFactory.BracketedArgumentList(GetSeparatedListFromArguments(context, args))
-            );
-        }
-
-        static ExpressionSyntax? ReplaceSetByIndexAccess(
-            ConversionContext context,
-            ExpressionSyntax scopeSyntax,
-            java.util.List args)
-        {
-            // Replace   expr.Set(i,v)   by   expr[i] = v
-            var argsList = args.ToList<Expression>() ?? [];
-            var left = SyntaxFactory.ElementAccessExpression(
-                 scopeSyntax,
-                 SyntaxFactory.BracketedArgumentList(GetSeparatedListFromArguments(context, argsList.Take(1)))
-                ).WithTrailingTrivia(SyntaxFactory.Whitespace(" "));
-            var right = ExpressionVisitor.VisitExpression(context, argsList[1])?.WithLeadingTrivia(SyntaxFactory.Whitespace(" "));
-            if (right is null)
-            {
-                return null;
-            }
-
-            return SyntaxFactory.AssignmentExpression(SyntaxKind.SimpleAssignmentExpression, left, right);
-        }
     }
 }

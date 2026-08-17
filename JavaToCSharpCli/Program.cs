@@ -1,4 +1,5 @@
 ﻿using JavaToCSharp;
+using JavaToCSharp.TypeMapping;
 using Microsoft.Extensions.Logging;
 using System.CommandLine;
 
@@ -83,6 +84,48 @@ public class Program
         Description = "A yaml file with syntax mappings from imports, methods and annotations",
     };
 
+    private static readonly Option<List<string>> _mappingFileOption = new("--mapping-file")
+    {
+        Description = "A yaml file with type and member mappings (namespaces and class_map). Repeatable; later files merge over earlier ones",
+        HelpName = "path",
+    };
+
+    private static readonly Option<bool> _consoleMappingOption = new("--console-mapping")
+    {
+        Description = "Include the built-in Console mapping spec (java.lang.System out/err -> System.Console)",
+        DefaultValueFactory = _ => false,
+    };
+
+    private static readonly Option<bool> _systemMappingOption = new("--system-mapping")
+    {
+        Description = "Include the built-in System mapping spec (java.lang Math, boxing types, String, Object)",
+        DefaultValueFactory = _ => false,
+    };
+
+    private static readonly Option<bool> _collectionsMappingOption = new("--collections-mapping")
+    {
+        Description = "Include the built-in System.Collections mapping spec (java.util collections -> System.Collections)",
+        DefaultValueFactory = _ => false,
+    };
+
+    private static readonly Option<bool> _ioMappingOption = new("--io-mapping")
+    {
+        Description = "Include the built-in System.IO mapping spec (java.io / java.nio.file -> System.IO)",
+        DefaultValueFactory = _ => false,
+    };
+
+    private static readonly Option<bool> _threadingMappingOption = new("--threading-mapping")
+    {
+        Description = "Include the built-in System.Threading mapping spec (java.lang.Thread / java.util.concurrent -> System.Threading)",
+        DefaultValueFactory = _ => false,
+    };
+
+    private static readonly Option<bool> _textMappingOption = new("--text-mapping")
+    {
+        Description = "Include the built-in System.Text mapping spec (StringBuilder, MessageFormat)",
+        DefaultValueFactory = _ => false,
+    };
+
     private static readonly Option<int> _maxParallelismOption = new("--max-parallelism")
     {
         Description = "Maximum degree of parallelism for directory conversion (default: number of CPU cores)",
@@ -156,6 +199,13 @@ public class Program
         rootCommand.Options.Add(_clearDefaultUsingsOption);
         rootCommand.Options.Add(_addUsingsOption);
         rootCommand.Options.Add(_mappingsFileNameOption);
+        rootCommand.Options.Add(_mappingFileOption);
+        rootCommand.Options.Add(_consoleMappingOption);
+        rootCommand.Options.Add(_systemMappingOption);
+        rootCommand.Options.Add(_collectionsMappingOption);
+        rootCommand.Options.Add(_ioMappingOption);
+        rootCommand.Options.Add(_threadingMappingOption);
+        rootCommand.Options.Add(_textMappingOption);
         rootCommand.Options.Add(_enableLoggingOption);
         rootCommand.Options.Add(_logFileOption);
 
@@ -235,6 +285,55 @@ public class Program
         if (!string.IsNullOrEmpty(mappingsFile))
         {
             options.SyntaxMappings = ReadMappingsFile(mappingsFile);
+        }
+
+        var mappingFiles = context.GetValue(_mappingFileOption);
+
+        var selectedSpecs = new List<BuiltInMappingSpec>();
+        if (context.GetValue(_consoleMappingOption))
+        {
+            selectedSpecs.Add(BuiltInMappingSpec.Console);
+        }
+
+        if (context.GetValue(_systemMappingOption))
+        {
+            selectedSpecs.Add(BuiltInMappingSpec.System);
+        }
+
+        if (context.GetValue(_collectionsMappingOption))
+        {
+            selectedSpecs.Add(BuiltInMappingSpec.SystemCollections);
+        }
+
+        if (context.GetValue(_ioMappingOption))
+        {
+            selectedSpecs.Add(BuiltInMappingSpec.SystemIO);
+        }
+
+        if (context.GetValue(_threadingMappingOption))
+        {
+            selectedSpecs.Add(BuiltInMappingSpec.SystemThreading);
+        }
+
+        if (context.GetValue(_textMappingOption))
+        {
+            selectedSpecs.Add(BuiltInMappingSpec.SystemText);
+        }
+
+        if (selectedSpecs.Count > 0 || mappingFiles is { Count: > 0 })
+        {
+            var builder = new TypeMappingBuilder();
+            foreach (var spec in selectedSpecs)
+            {
+                builder.AddBuiltIn(spec);
+            }
+
+            if (mappingFiles is { Count: > 0 })
+            {
+                builder.AddYamlFiles(mappingFiles);
+            }
+
+            options.MappingIndex = builder.Build();
         }
 
         return options;

@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <Version>4.0.3</Version>
+        <Version>4.0.5</Version>
         <TargetFramework>net10.0</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
@@ -8,13 +8,16 @@
         <WarningsNotAsErrors>NX0001;NX0002</WarningsNotAsErrors>
         <Authors>Paul Irwin</Authors>
         <Description>A Java to C# converter.</Description>
-        <Copyright>Copyright 2021-2025, Paul Irwin</Copyright>
+        <Copyright>Copyright 2021-2026, Paul Irwin</Copyright>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <RepositoryUrl>https://github.com/paulirwin/JavaToCSharp</RepositoryUrl>
         <LangVersion>latest</LangVersion>
     </PropertyGroup>
     <ItemGroup>
         <None Include="..\.editorconfig" Link=".editorconfig"/>
+    </ItemGroup>
+    <ItemGroup>
+        <EmbeddedResource Include="TypeMapping\BuiltInMappings\*.yaml"/>
     </ItemGroup>
     <ItemGroup>
         <PackageReference Include="IKVM" Version="8.15.0"/>

@@ -1,10 +1,12 @@
 ﻿using com.github.javaparser.ast.body;
 using com.github.javaparser.ast.expr;
 using JavaToCSharp.Declarations;
+using JavaToCSharp.TypeMapping;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using com.github.javaparser.ast;
 using com.github.javaparser.ast.type;
+using Type = com.github.javaparser.ast.type.Type;
 
 namespace JavaToCSharp.Expressions;
 
@@ -29,7 +31,20 @@ public class ObjectCreationExpressionVisitor : ExpressionVisitor<ObjectCreationE
 
         var type = newExpr.getType();
 
-        var typeSyntax = TypeHelper.GetSyntaxFromType(type);
+        var typeSyntax = TypeHelper.GetSyntaxFromType(context, type);
+
+        // Diamond operator (new HashMap<>()) — JavaParser infers type args from the LHS
+        // but doesn't resolve them in the AST. Look at the enclosing variable declaration
+        // to recover them so C# gets explicit generic arguments.
+        var javaTypeArgs = type.getTypeArguments().FromOptional<NodeList>()?.ToList<Type>();
+        if (javaTypeArgs is null or { Count: 0 } && typeSyntax is PredefinedTypeSyntax or IdentifierNameSyntax or QualifiedNameSyntax)
+        {
+            var inferred = InferTypeArgsFromEnclosing(context, newExpr, type);
+            if (inferred is not null)
+            {
+                typeSyntax = inferred;
+            }
+        }
 
         var args = newExpr.getArguments();
 
@@ -43,7 +58,7 @@ public class ObjectCreationExpressionVisitor : ExpressionVisitor<ObjectCreationE
 
     private static ObjectCreationExpressionSyntax VisitAnonymousClassCreationExpression(ConversionContext context, ObjectCreationExpr newExpr, List<BodyDeclaration> anonBody)
     {
-        string baseTypeName = TypeHelper.ConvertType(newExpr.getType().getNameAsString());
+        string baseTypeName = TypeHelper.ConvertType(context, newExpr.getType().getNameAsString());
         string anonTypeName = string.Empty;
 
         for (int i = 0; i <= 100; i++)
@@ -107,5 +122,95 @@ public class ObjectCreationExpressionVisitor : ExpressionVisitor<ObjectCreationE
         return SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName(anonTypeName),
             TypeHelper.GetSyntaxFromArguments(context, args),
             null);
+    }
+
+    /// <summary>
+    /// When a Java <c>new HashMap&lt;&gt;()</c> uses the diamond operator, JavaParser leaves the
+    /// type arguments empty. This method walks up to the enclosing variable declaration and
+    /// uses its declared type's generics to rebuild the C# type with explicit arguments
+    /// (e.g. <c>new Dictionary&lt;String, Item&gt;()</c>).
+    /// </summary>
+    private static TypeSyntax? InferTypeArgsFromEnclosing(ConversionContext context, ObjectCreationExpr newExpr, ClassOrInterfaceType type)
+    {
+        var parent = newExpr.getParentNode().FromOptional<Node>();
+        if (parent is null)
+        {
+            return null;
+        }
+
+        // Case 1: Type x = new HashMap<>() — VariableDeclarator with an explicit type
+        if (parent is VariableDeclarator varDecl)
+        {
+            var varType = varDecl.getType();
+            if (varType is ClassOrInterfaceType classType)
+            {
+                var typeArgs = classType.getTypeArguments().FromOptional<NodeList>()?.ToList<Type>();
+                if (typeArgs is { Count: > 0 })
+                {
+                    var typeName = TypeHelper.ConvertType(context, type.getNameAsString());
+                    return SyntaxFactory.GenericName(typeName)
+                        .AddTypeArgumentListArguments(typeArgs
+                            .Select(t => SyntaxFactory.ParseTypeName(TypeHelper.ConvertType(context, t.toString())))
+                            .ToArray());
+                }
+            }
+        }
+
+        // Case 2: x = new HashMap<>() — Assignment to a variable we already know the type of
+        if (parent is AssignExpr assignExpr)
+        {
+            var target = assignExpr.getTarget();
+            if (target is NameExpr nameExpr && context.TryGetVariableType(nameExpr.getNameAsString(), out var declaredType))
+            {
+                var raw = TypeMappingResolver.StripGenericsAndArrays(declaredType);
+                if (raw != declaredType)
+                {
+                    // declaredType contains generics, e.g. "Map<String, Item>" — extract them
+                    var genericStart = declaredType.IndexOf('<');
+                    if (genericStart >= 0)
+                    {
+                        var inner = declaredType.Substring(genericStart + 1, declaredType.LastIndexOf('>') - genericStart - 1);
+                        var typeName = TypeHelper.ConvertType(context, type.getNameAsString());
+                        var typeArgStrings = SplitTopLevelTypeArgs(inner);
+                        if (typeArgStrings.Count > 0)
+                        {
+                            return SyntaxFactory.GenericName(typeName)
+                                .AddTypeArgumentListArguments(typeArgStrings
+                                    .Select(a => SyntaxFactory.ParseTypeName(TypeHelper.ConvertType(context, a.Trim())))
+                                    .ToArray());
+                        }
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Splits a comma-separated list of type arguments, respecting nested generics
+    /// (e.g. <c>"Map&lt;String, Integer&gt;, List&lt;String&gt;"</c> splits into
+    /// <c>["Map&lt;String, Integer&gt;", "List&lt;String&gt;"]</c>).
+    /// </summary>
+    private static List<string> SplitTopLevelTypeArgs(string inner)
+    {
+        var result = new List<string>();
+        int depth = 0;
+        int start = 0;
+        for (int i = 0; i < inner.Length; i++)
+        {
+            if (inner[i] == '<') depth++;
+            else if (inner[i] == '>') depth--;
+            else if (inner[i] == ',' && depth == 0)
+            {
+                result.Add(inner.Substring(start, i - start));
+                start = i + 1;
+            }
+        }
+        if (start < inner.Length)
+        {
+            result.Add(inner.Substring(start));
+        }
+        return result;
     }
 }

@@ -10,7 +10,7 @@ public class ArrayCreationExpressionVisitor : ExpressionVisitor<ArrayCreationExp
 {
     protected override ExpressionSyntax Visit(ConversionContext context, ArrayCreationExpr expr)
     {
-        var type = TypeHelper.ConvertType(expr.getElementType());
+        var type = TypeHelper.ConvertType(context, expr.getElementType());
         var typeSyntax = SyntaxFactory.ParseTypeName(type);
         var arrayTypeSyntax = SyntaxFactory.ArrayType(typeSyntax);
 

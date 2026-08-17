@@ -166,5 +166,29 @@ namespace JavaToCSharpGui.Properties {
                 this["LogFilePath"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string MappingFiles {
+            get {
+                return ((string)(this["MappingFiles"]));
+            }
+            set {
+                this["MappingFiles"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string MappingSpecs {
+            get {
+                return ((string)(this["MappingSpecs"]));
+            }
+            set {
+                this["MappingSpecs"] = value;
+            }
+        }
     }
 }

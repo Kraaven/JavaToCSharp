@@ -19,16 +19,38 @@ public class ForEachStatementVisitor : StatementVisitor<ForEachStmt>
 
         var varExpr = foreachStmt.getVariable();
         var varType = varExpr.getCommonType();
-        var type = TypeHelper.ConvertType(varType);
+        var type = TypeHelper.ConvertType(context, varType);
 
         var variableDeclarators = varExpr.getVariables()?.ToList<VariableDeclarator>()?? [];
         var vars = variableDeclarators
                    .Select(i => SyntaxFactory.VariableDeclarator(i.toString()))
                    .ToArray();
 
-        var body = foreachStmt.getBody();
-        var bodySyntax = VisitStatement(context, body);
+        foreach (var declarator in variableDeclarators)
+        {
+            context.DeclareVariable(declarator.getNameAsString(), varExpr.getCommonType().toString());
+        }
 
-        return bodySyntax is null ? null : SyntaxFactory.ForEachStatement(SyntaxFactory.ParseTypeName(type), vars[0].Identifier.ValueText, iterableSyntax, bodySyntax);
+        var body = foreachStmt.getBody();
+
+        context.PushVariableScope();
+
+        try
+        {
+            foreach (var declarator in variableDeclarators)
+            {
+                context.DeclareVariable(declarator.getNameAsString(), varExpr.getCommonType().toString());
+            }
+
+            var bodySyntax = VisitStatement(context, body);
+
+            return bodySyntax is null
+                ? null
+                : SyntaxFactory.ForEachStatement(SyntaxFactory.ParseTypeName(type), vars[0].Identifier.ValueText, iterableSyntax, bodySyntax);
+        }
+        finally
+        {
+            context.PopVariableScope();
+        }
     }
 }

@@ -32,6 +32,12 @@ public static class UsingsHelper
                 }
                 nameSpace = mappedNamespace;
             }
+            // Otherwise derive the namespace from the mapping index's package-to-namespace rows.
+            else if (options?.MappingIndex is not null
+                     && options.MappingIndex.TryGetCSharpPackages(importNameWithoutClassName, out var csharpPackages))
+            {
+                nameSpace = csharpPackages[0];
+            }
 
             var usingSyntax = SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(nameSpace));
 
@@ -47,6 +53,14 @@ public static class UsingsHelper
         {
             usings.AddRange(options.Usings
                 .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(ns => SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(ns)).NormalizeWhitespace().WithTrailingNewLines()));
+        }
+
+        // Mapping-derived usings: sorted alphabetically and deduplicated among themselves.
+        if (context.MappingUsings.Count > 0)
+        {
+            usings.AddRange(context.MappingUsings
+                .OrderBy(ns => ns, StringComparer.Ordinal)
                 .Select(ns => SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(ns)).NormalizeWhitespace().WithTrailingNewLines()));
         }
 

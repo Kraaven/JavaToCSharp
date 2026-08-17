@@ -9,7 +9,17 @@ public class BlockStatementVisitor : StatementVisitor<BlockStmt>
     public override StatementSyntax Visit(ConversionContext context, BlockStmt blockStmt)
     {
         var statements = blockStmt.getStatements().ToList<Statement>();
-        var syntaxes = VisitStatements(context, statements);
-        return SyntaxFactory.Block(syntaxes);
+
+        context.PushVariableScope();
+
+        try
+        {
+            var syntaxes = VisitStatements(context, statements);
+            return SyntaxFactory.Block(syntaxes);
+        }
+        finally
+        {
+            context.PopVariableScope();
+        }
     }
 }

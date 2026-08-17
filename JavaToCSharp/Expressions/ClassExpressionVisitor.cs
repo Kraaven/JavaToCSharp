@@ -8,7 +8,7 @@ public class ClassExpressionVisitor : ExpressionVisitor<ClassExpr>
 {
     protected override ExpressionSyntax Visit(ConversionContext context, ClassExpr expr)
     {
-        var type = TypeHelper.ConvertTypeOf(expr);
+        var type = TypeHelper.ConvertTypeOf(context, expr);
 
         return SyntaxFactory.TypeOfExpression(SyntaxFactory.ParseTypeName(type));
     }

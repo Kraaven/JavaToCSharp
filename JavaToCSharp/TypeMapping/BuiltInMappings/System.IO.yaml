@@ -1,0 +1,270 @@
+# Built-in mapping spec: java.io / java.nio.file -> System.IO
+#
+# java.io.PrintStream is intentionally NOT covered here: the Console built-in
+# spec owns the System.out/System.err chain, which keeps the java.io namespace
+# mapping unambiguous when both specs are enabled.
+namespaces:
+  - java_packages: [java.io]
+    csharp_packages: [System.IO]
+  - java_packages: [java.nio.file]
+    csharp_packages: [System.IO]
+
+class_map:
+  - java_class: java.io.File
+    csharp_class: File
+    entries:
+      - java_member: exists
+        arg_count: 0
+        kind: template
+        expression: "File.Exists($0)"
+      - java_member: createNewFile
+        arg_count: 0
+        kind: template
+        expression: "File.Create($0)"
+        confidence: medium
+        notes: "File.Create opens a FileStream and always overwrites; it does not return a bool."
+      - java_member: delete
+        arg_count: 0
+        kind: template
+        expression: "File.Delete($0)"
+      - java_member: renameTo
+        arg_count: 1
+        kind: template
+        expression: "File.Move($0, $1)"
+      - java_member: mkdir
+        arg_count: 0
+        kind: template
+        expression: "Directory.CreateDirectory($0)"
+        confidence: medium
+        notes: "CreateDirectory returns a DirectoryInfo, not a bool."
+      - java_member: mkdirs
+        arg_count: 0
+        kind: template
+        expression: "Directory.CreateDirectory($0)"
+        confidence: medium
+        notes: "CreateDirectory returns a DirectoryInfo, not a bool."
+      - java_member: isFile
+        arg_count: 0
+        kind: unsupported
+        notes: "File.Exists also returns true for directories; check File.GetAttributes for the Directory flag."
+      - java_member: isDirectory
+        arg_count: 0
+        kind: unsupported
+        notes: "Use Directory.Exists($0)."
+      - java_member: listFiles
+        arg_count: 0
+        kind: template
+        expression: "Directory.GetFiles($0)"
+        confidence: medium
+        notes: "Returns string[] instead of File[]."
+      - java_member: list
+        arg_count: 0
+        kind: unsupported
+        notes: "Use Directory.GetFiles/Directory.GetDirectories."
+      - java_member: getAbsolutePath
+        arg_count: 0
+        kind: template
+        expression: "Path.GetFullPath($0)"
+      - java_member: getPath
+        arg_count: 0
+        kind: template
+        expression: "$0"
+        confidence: medium
+        notes: "A File path is already a plain string in C#."
+      - java_member: getName
+        arg_count: 0
+        kind: template
+        expression: "Path.GetFileName($0)"
+      - java_member: getParent
+        arg_count: 0
+        kind: template
+        expression: "Path.GetDirectoryName($0)"
+      - java_member: length
+        arg_count: 0
+        kind: template
+        expression: "new FileInfo($0).Length"
+      - java_member: lastModified
+        arg_count: 0
+        kind: template
+        expression: "File.GetLastWriteTimeUtc($0)"
+        confidence: medium
+        notes: "Java returns epoch milliseconds; C# returns a DateTime. Adjust the call site."
+      - java_member: separator
+        member_type: field
+        kind: template
+        expression: "Path.DirectorySeparatorChar"
+      - java_member: pathSeparator
+        member_type: field
+        kind: template
+        expression: "Path.PathSeparator"
+      - java_member: getCanonicalPath
+        arg_count: 0
+        kind: unsupported
+        notes: "Use Path.GetFullPath($0)."
+      - java_member: canRead
+        arg_count: 0
+        kind: unsupported
+      - java_member: canWrite
+        arg_count: 0
+        kind: unsupported
+      - java_member: isHidden
+        arg_count: 0
+        kind: unsupported
+      - java_member: setReadable
+        arg_count: 1
+        kind: unsupported
+      - java_member: setWritable
+        arg_count: 1
+        kind: unsupported
+      - java_member: setExecutable
+        arg_count: 1
+        kind: unsupported
+      - java_member: deleteOnExit
+        arg_count: 0
+        kind: unsupported
+      - java_member: toPath
+        arg_count: 0
+        kind: unsupported
+      - java_member: toURI
+        arg_count: 0
+        kind: unsupported
+
+  - java_class: java.nio.file.Files
+    csharp_class: File
+    entries:
+      - java_member: readString
+        arg_count: 1
+        kind: template
+        expression: "File.ReadAllText($1)"
+      - java_member: writeString
+        arg_count: 2
+        kind: template
+        expression: "File.WriteAllText($1, $2)"
+      - java_member: readAllBytes
+        arg_count: 1
+        kind: template
+        expression: "File.ReadAllBytes($1)"
+      - java_member: write
+        arg_count: 2
+        kind: unsupported
+        notes: "Use File.WriteAllBytes($1, $2)."
+      - java_member: exists
+        arg_count: 1
+        kind: template
+        expression: "File.Exists($1)"
+      - java_member: notExists
+        arg_count: 1
+        kind: template
+        expression: "!File.Exists($1)"
+      - java_member: createDirectories
+        arg_count: 1
+        kind: template
+        expression: "Directory.CreateDirectory($1)"
+      - java_member: createDirectory
+        arg_count: 1
+        kind: template
+        expression: "Directory.CreateDirectory($1)"
+      - java_member: delete
+        arg_count: 1
+        kind: template
+        expression: "File.Delete($1)"
+      - java_member: deleteIfExists
+        arg_count: 1
+        kind: template
+        expression: "File.Delete($1)"
+        confidence: medium
+        notes: "File.Delete throws if the file does not exist; guard with File.Exists."
+      - java_member: move
+        arg_count: 2
+        kind: template
+        expression: "File.Move($1, $2)"
+      - java_member: copy
+        arg_count: 2
+        kind: unsupported
+        notes: "Use File.Copy($1, $2)."
+      - java_member: size
+        arg_count: 1
+        kind: template
+        expression: "new FileInfo($1).Length"
+      - java_member: getLastModifiedTime
+        arg_count: 1
+        kind: template
+        expression: "File.GetLastWriteTimeUtc($1)"
+        confidence: medium
+        notes: "Java returns epoch milliseconds; C# returns a DateTime. Adjust the call site."
+      - java_member: isDirectory
+        arg_count: 1
+        kind: unsupported
+        notes: "Use Directory.Exists($1)."
+      - java_member: isRegularFile
+        arg_count: 1
+        kind: unsupported
+        notes: "Use File.Exists($1) (which also matches directories; check attributes if needed)."
+      - java_member: list
+        arg_count: 1
+        kind: template
+        expression: "Directory.GetFiles($1)"
+        confidence: medium
+        notes: "Returns string[] instead of Stream<Path>."
+      - java_member: lines
+        arg_count: 1
+        kind: template
+        expression: "File.ReadLines($1)"
+      - java_member: newInputStream
+        arg_count: 1
+        kind: unsupported
+        notes: "Use File.OpenRead($1)."
+      - java_member: newOutputStream
+        arg_count: 1
+        kind: unsupported
+        notes: "Use File.OpenWrite($1)."
+      - java_member: newBufferedReader
+        arg_count: 1
+        kind: unsupported
+        notes: "Use new StreamReader($1)."
+      - java_member: newBufferedWriter
+        arg_count: 1
+        kind: unsupported
+        notes: "Use new StreamWriter($1)."
+      - java_member: readAllLines
+        arg_count: 1
+        kind: unsupported
+        notes: "Use File.ReadAllLines($1)."
+      - java_member: write
+        arg_count: 3
+        kind: unsupported
+
+  - java_class: java.io.BufferedReader
+    csharp_class: StreamReader
+
+  - java_class: java.io.BufferedWriter
+    csharp_class: StreamWriter
+
+  - java_class: java.io.FileReader
+    csharp_class: StreamReader
+
+  - java_class: java.io.FileWriter
+    csharp_class: StreamWriter
+
+  - java_class: java.io.FileInputStream
+    csharp_class: FileStream
+
+  - java_class: java.io.FileOutputStream
+    csharp_class: FileStream
+
+  - java_class: java.io.ByteArrayInputStream
+    csharp_class: MemoryStream
+
+  - java_class: java.io.ByteArrayOutputStream
+    csharp_class: MemoryStream
+
+  - java_class: java.io.PrintWriter
+    csharp_class: TextWriter
+
+  - java_class: java.io.IOException
+    csharp_class: IOException
+    kind: exception
+
+  - java_class: java.io.FileNotFoundException
+    csharp_class: FileNotFoundException
+    kind: exception

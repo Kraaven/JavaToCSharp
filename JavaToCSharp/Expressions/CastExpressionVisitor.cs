@@ -15,7 +15,7 @@ public class CastExpressionVisitor : ExpressionVisitor<CastExpr>
             return null;
         }
 
-        var type = TypeHelper.ConvertTypeOf(castExpr);
+        var type = TypeHelper.ConvertTypeOf(context, castExpr);
         return SyntaxFactory.CastExpression(SyntaxFactory.ParseTypeName(type), exprSyntax);
     }
 }

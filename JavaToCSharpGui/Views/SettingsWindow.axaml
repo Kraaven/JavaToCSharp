@@ -28,6 +28,63 @@
                     </ListBox>
                 </StackPanel>
             </TabItem>
+            <TabItem Header="Mappings">
+                <StackPanel Orientation="Vertical" Margin="0,0,10,0">
+                    <TextBlock Margin="5" TextWrapping="Wrap">
+                        Built-in mapping specs (bundled with the converter). Check the ones to apply
+                        to every conversion; they merge with the mapping files below.
+                    </TextBlock>
+                    <CheckBox Margin="5" Name="ConsoleMapping"
+                              IsChecked="{CompiledBinding ConsoleMapping}">
+                        Console (System.out.println -&gt; Console.WriteLine, System.exit, currentTimeMillis)
+                    </CheckBox>
+                    <CheckBox Margin="5" Name="SystemMapping"
+                              IsChecked="{CompiledBinding SystemMapping}">
+                        System (Math, Integer/Long/... boxing types, String, Object)
+                    </CheckBox>
+                    <CheckBox Margin="5" Name="CollectionsMapping"
+                              IsChecked="{CompiledBinding CollectionsMapping}">
+                        System.Collections (java.util List/Map/Set, Collections, Arrays, Objects)
+                    </CheckBox>
+                    <CheckBox Margin="5" Name="IoMapping"
+                              IsChecked="{CompiledBinding IoMapping}">
+                        System.IO (java.io / java.nio.file File, Files, stream types)
+                    </CheckBox>
+                    <CheckBox Margin="5" Name="ThreadingMapping"
+                              IsChecked="{CompiledBinding ThreadingMapping}">
+                        System.Threading (Thread, java.util.concurrent)
+                    </CheckBox>
+                    <CheckBox Margin="5" Name="TextMapping"
+                              IsChecked="{CompiledBinding TextMapping}">
+                        System.Text (StringBuilder, MessageFormat)
+                    </CheckBox>
+                    <TextBlock Margin="5" TextWrapping="Wrap">
+                        Mapping files (yaml with namespaces/class_map) applied to every conversion.
+                        Multiple files are merged; later files win on conflicts.
+                    </TextBlock>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBox Name="AddMappingFileInput" Margin="5,2,5,2"
+                                 Text="{CompiledBinding AddMappingFileInput}"
+                                 Watermark="path to a mapping file" />
+                        <Button Name="AddMappingFile" Grid.Column="1" Margin="5,2,5,2"
+                                Command="{CompiledBinding AddMappingFileCommand}">
+                            Add
+                        </Button>
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <ListBox MinHeight="100"
+                                 Margin="5"
+                                 Name="MappingFiles"
+                                 ItemsSource="{CompiledBinding MappingFiles}"
+                                 SelectedItem="{CompiledBinding SelectedMappingFile}">
+                        </ListBox>
+                        <Button Name="RemoveMappingFile" Grid.Column="1" Margin="5,2,5,2"
+                                Command="{CompiledBinding RemoveSelectedMappingFileCommand}">
+                            Remove
+                        </Button>
+                    </Grid>
+                </StackPanel>
+            </TabItem>
             <TabItem Header="Options">
                 <StackPanel Orientation="Vertical">
                     <CheckBox Margin="5" Name="IncludeUsings"

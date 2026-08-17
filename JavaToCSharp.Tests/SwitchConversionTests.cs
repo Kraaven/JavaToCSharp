@@ -345,4 +345,122 @@ public class T {
         Assert.Contains("operator ==", parsed);
         Assert.Contains("ReferenceEquals", parsed);
     }
+
+    [Fact]
+    public void BlockCaseBody_TerminatingBreakIsStripped_NoFallThrough()
+    {
+        const string java = """
+public class T {
+    void m(int x) {
+        switch (x) {
+            case 1: {
+                foo();
+                break;
+            }
+            case 2:
+                bar();
+                break;
+            default:
+                baz();
+                break;
+        }
+    }
+    void foo() {}
+    void bar() {}
+    void baz() {}
+}
+""";
+
+        var parsed = Convert(java);
+
+        Assert.Contains("if (x == 1)", parsed);
+        Assert.Contains("else if (x == 2)", parsed);
+        Assert.DoesNotContain("break;", parsed);
+
+        // case 1 body must not bleed into case 2
+        var case1Start = parsed.IndexOf("if (x == 1)", StringComparison.Ordinal);
+        var case2Start = parsed.IndexOf("else if (x == 2)", StringComparison.Ordinal);
+        Assert.True(case1Start >= 0 && case2Start > case1Start);
+        var case1Body = parsed[case1Start..case2Start];
+        Assert.Contains("Foo()", case1Body);
+        Assert.DoesNotContain("Bar()", case1Body);
+    }
+
+    [Fact]
+    public void BlockCaseBody_ReturnInsideBlock_TerminatesArm()
+    {
+        const string java = """
+public class T {
+    int m(int x) {
+        switch (x) {
+            case 1: {
+                foo();
+                return 10;
+            }
+            case 2:
+                bar();
+                return 20;
+            default:
+                return 0;
+        }
+    }
+    void foo() {}
+    void bar() {}
+}
+""";
+
+        var parsed = Convert(java);
+
+        Assert.Contains("return 10", parsed);
+        Assert.Contains("return 20", parsed);
+        Assert.Contains("return 0", parsed);
+
+        // case 1 arm must not swallow the later arms (fall-through regression check)
+        var case1Start = parsed.IndexOf("if (x == 1)", StringComparison.Ordinal);
+        var case2Start = parsed.IndexOf("else if (x == 2)", StringComparison.Ordinal);
+        Assert.True(case1Start >= 0 && case2Start > case1Start);
+        var case1Body = parsed[case1Start..case2Start];
+        Assert.Contains("return 10", case1Body);
+        Assert.DoesNotContain("return 20", case1Body);
+        Assert.DoesNotContain("return 0", case1Body);
+    }
+
+    [Fact]
+    public void BreakInsideLoopInCaseBody_IsPreserved()
+    {
+        const string java = """
+public class T {
+    void m(int x) {
+        switch (x) {
+            case 1:
+                for (int i = 0; i < 3; i++) {
+                    if (i == 2) {
+                        break;
+                    }
+                    foo();
+                }
+                break;
+            case 2:
+                bar();
+                break;
+        }
+    }
+    void foo() {}
+    void bar() {}
+}
+""";
+
+        var parsed = Convert(java);
+
+        // the loop's break survives the conversion; only the case-terminating break is removed
+        Assert.Contains("break;", parsed);
+
+        var case1Start = parsed.IndexOf("if (x == 1)", StringComparison.Ordinal);
+        var case2Start = parsed.IndexOf("else if (x == 2)", StringComparison.Ordinal);
+        Assert.True(case1Start >= 0 && case2Start > case1Start);
+        var case1Body = parsed[case1Start..case2Start];
+        Assert.Contains("for (int i = 0", case1Body);
+        Assert.Contains("break;", case1Body);
+        Assert.DoesNotContain("Bar()", case1Body);
+    }
 }

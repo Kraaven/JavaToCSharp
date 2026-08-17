@@ -1,0 +1,89 @@
+# Built-in mapping spec: text builders and formatting -> System.Text
+#
+# Note: java.lang.StringBuilder maps to System.Text.StringBuilder, but the
+# java.lang namespace row injects `using System`. Ensure your output usings
+# include System.Text (the CLI and GUI add it by default).
+namespaces:
+  - java_packages: [java.lang]
+    csharp_packages: [System]
+  - java_packages: [java.text]
+    csharp_packages: [System]
+
+class_map:
+  - java_class: java.lang.StringBuilder
+    csharp_class: StringBuilder
+    entries:
+      - java_member: append
+        arg_count: variadic
+        kind: rename
+        csharp_member: Append
+      - java_member: length
+        arg_count: 0
+        kind: property
+        csharp_member: Length
+      - java_member: toString
+        arg_count: 0
+        kind: rename
+        csharp_member: ToString
+      - java_member: charAt
+        arg_count: 1
+        kind: template
+        expression: "$0[$1]"
+      - java_member: setCharAt
+        arg_count: 2
+        kind: template
+        expression: "$0[$1] = $2"
+      - java_member: delete
+        arg_count: 2
+        kind: template
+        expression: "$0.Remove($1, $2 - $1)"
+        notes: "Java's delete(start, end) becomes Remove(start, length)."
+      - java_member: deleteCharAt
+        arg_count: 1
+        kind: template
+        expression: "$0.Remove($1, 1)"
+        notes: "C# StringBuilder.Remove requires (startIndex, count)."
+      - java_member: insert
+        arg_count: 2
+        kind: rename
+        csharp_member: Insert
+      - java_member: indexOf
+        arg_count: 1
+        kind: rename
+        csharp_member: IndexOf
+      - java_member: substring
+        arg_count: 2
+        kind: template
+        expression: "$0.Substring($1, $2 - $1)"
+        notes: "Java's endIndex becomes a C# length."
+      - java_member: setLength
+        arg_count: 1
+        kind: template
+        expression: "$0.Length = $1"
+      - java_member: reverse
+        arg_count: 0
+        kind: unsupported
+        notes: "No in-place reverse on StringBuilder; reverse the char sequence manually."
+      - java_member: capacity
+        arg_count: 0
+        kind: unsupported
+      - java_member: ensureCapacity
+        arg_count: 1
+        kind: unsupported
+        notes: "Set StringBuilder.Capacity instead."
+      - java_member: trimToSize
+        arg_count: 0
+        kind: unsupported
+
+  - java_class: java.lang.StringBuffer
+    csharp_class: StringBuilder
+
+  - java_class: java.text.MessageFormat
+    csharp_class: string
+    entries:
+      - java_member: format
+        arg_count: variadic
+        kind: template
+        expression: "string.Format($1, $rest)"
+        confidence: medium
+        notes: "Java MessageFormat and C# string.Format both use {0} placeholders, but style options and apostrophe escaping differ. Review."

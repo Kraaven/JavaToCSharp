@@ -1,0 +1,277 @@
+# Built-in mapping spec: threads and concurrent utilities -> System.Threading
+#
+# Static Thread members use fully-qualified System.Threading.Thread templates so
+# the output compiles without adding a using for System.Threading (the java.lang
+# namespace row only injects `using System`).
+namespaces:
+  - java_packages: [java.lang]
+    csharp_packages: [System]
+  - java_packages: [java.util.concurrent]
+    csharp_packages: [System.Threading]
+  - java_packages: [java.util.concurrent.atomic]
+    csharp_packages: [System.Threading]
+
+class_map:
+  - java_class: java.lang.Thread
+    csharp_class: Thread
+    entries:
+      - java_member: currentThread
+        arg_count: 0
+        kind: template
+        expression: "System.Threading.Thread.CurrentThread"
+        notes: "Thread.CurrentThread is a property, not a method."
+      - java_member: sleep
+        arg_count: 1
+        kind: template
+        expression: "System.Threading.Thread.Sleep($1)"
+      - java_member: yield
+        arg_count: 0
+        kind: template
+        expression: "System.Threading.Thread.Yield()"
+      - java_member: getName
+        arg_count: 0
+        kind: template
+        expression: "$0.Name"
+      - java_member: setName
+        arg_count: 1
+        kind: template
+        expression: "$0.Name = $1"
+      - java_member: isAlive
+        arg_count: 0
+        kind: template
+        expression: "$0.IsAlive"
+      - java_member: join
+        arg_count: 0
+        kind: template
+        expression: "$0.Join()"
+      - java_member: join
+        arg_count: 1
+        kind: template
+        expression: "$0.Join($1)"
+      - java_member: start
+        arg_count: 0
+        kind: template
+        expression: "$0.Start()"
+      - java_member: run
+        arg_count: 0
+        kind: unsupported
+        notes: "C# uses delegates/tasks instead of a run() thread body."
+      - java_member: interrupt
+        arg_count: 0
+        kind: unsupported
+        notes: "C# uses CancellationToken instead of thread interrupts."
+      - java_member: isInterrupted
+        arg_count: 0
+        kind: unsupported
+      - java_member: setDaemon
+        arg_count: 1
+        kind: unsupported
+        notes: "Set thread.IsBackground instead."
+      - java_member: getId
+        arg_count: 0
+        kind: unsupported
+      - java_member: getPriority
+        arg_count: 0
+        kind: template
+        expression: "$0.Priority"
+      - java_member: setPriority
+        arg_count: 1
+        kind: template
+        expression: "$0.Priority = $1"
+      - java_member: getState
+        arg_count: 0
+        kind: unsupported
+      - java_member: stop
+        arg_count: 0
+        kind: unsupported
+      - java_member: suspend
+        arg_count: 0
+        kind: unsupported
+      - java_member: resume
+        arg_count: 0
+        kind: unsupported
+      - java_member: interrupted
+        arg_count: 0
+        kind: unsupported
+
+  - java_class: java.lang.Runnable
+    csharp_class: Action
+    kind: interface
+
+  - java_class: java.util.concurrent.Executors
+    csharp_class: Executors
+    entries:
+      - java_member: newFixedThreadPool
+        arg_count: 1
+        kind: unsupported
+        notes: "C# has no direct equivalent; prefer Task.Run / Task-based parallelism or Channels."
+      - java_member: newSingleThreadExecutor
+        arg_count: 0
+        kind: unsupported
+        notes: "Prefer a long-lived Task or System.Threading.Channels."
+      - java_member: newCachedThreadPool
+        arg_count: 0
+        kind: unsupported
+      - java_member: newScheduledThreadPool
+        arg_count: 1
+        kind: unsupported
+        notes: "Use System.Threading.Timer or PeriodicTimer."
+      - java_member: newWorkStealingPool
+        arg_count: 0
+        kind: unsupported
+        notes: "Use Parallel or the default TaskScheduler."
+      - java_member: defaultThreadFactory
+        arg_count: 0
+        kind: unsupported
+      - java_member: callable
+        arg_count: 1
+        kind: unsupported
+
+  - java_class: java.util.concurrent.ConcurrentHashMap
+    csharp_class: ConcurrentDictionary
+    generic: true
+    entries:
+      - java_member: put
+        arg_count: 2
+        kind: template
+        expression: "$0[$1] = $2"
+      - java_member: get
+        arg_count: 1
+        kind: template
+        expression: "$0[$1]"
+      - java_member: containsKey
+        arg_count: 1
+        kind: rename
+        csharp_member: ContainsKey
+      - java_member: size
+        arg_count: 0
+        kind: property
+        csharp_member: Count
+      - java_member: isEmpty
+        arg_count: 0
+        kind: template
+        expression: "$0.Count == 0"
+      - java_member: putIfAbsent
+        arg_count: 2
+        kind: rename
+        csharp_member: TryAdd
+        confidence: medium
+        notes: "TryAdd returns bool; Java putIfAbsent returns the prior value."
+      - java_member: computeIfAbsent
+        arg_count: 2
+        kind: unsupported
+        notes: "Use GetOrAdd on ConcurrentDictionary."
+      - java_member: remove
+        arg_count: 2
+        kind: unsupported
+        notes: "Use TryRemove on ConcurrentDictionary."
+
+  - java_class: java.util.concurrent.atomic.AtomicInteger
+    csharp_class: int
+    entries:
+      - java_member: get
+        arg_count: 0
+        kind: unsupported
+        notes: "Use Interlocked.Read/Volatile.Read or a plain field."
+      - java_member: set
+        arg_count: 1
+        kind: unsupported
+        notes: "Use Volatile.Write or Interlocked.Exchange."
+      - java_member: incrementAndGet
+        arg_count: 0
+        kind: unsupported
+        notes: "Use Interlocked.Increment(ref field)."
+      - java_member: getAndIncrement
+        arg_count: 0
+        kind: unsupported
+        notes: "Use Interlocked.Increment(ref field) and subtract one."
+      - java_member: decrementAndGet
+        arg_count: 0
+        kind: unsupported
+        notes: "Use Interlocked.Decrement(ref field)."
+      - java_member: getAndDecrement
+        arg_count: 0
+        kind: unsupported
+        notes: "Use Interlocked.Decrement(ref field) and add one."
+      - java_member: addAndGet
+        arg_count: 1
+        kind: unsupported
+        notes: "Use Interlocked.Add(ref field, $1)."
+      - java_member: getAndAdd
+        arg_count: 1
+        kind: unsupported
+        notes: "Use Interlocked.Add and subtract the added value."
+      - java_member: compareAndSet
+        arg_count: 2
+        kind: unsupported
+        notes: "Use Interlocked.CompareExchange."
+      - java_member: getAndSet
+        arg_count: 1
+        kind: unsupported
+        notes: "Use Interlocked.Exchange."
+
+  - java_class: java.util.concurrent.atomic.AtomicLong
+    csharp_class: long
+    entries:
+      - java_member: get
+        arg_count: 0
+        kind: unsupported
+        notes: "Use Interlocked.Read/Volatile.Read or a plain field."
+      - java_member: set
+        arg_count: 1
+        kind: unsupported
+        notes: "Use Volatile.Write or Interlocked.Exchange."
+      - java_member: incrementAndGet
+        arg_count: 0
+        kind: unsupported
+        notes: "Use Interlocked.Increment(ref field)."
+      - java_member: getAndIncrement
+        arg_count: 0
+        kind: unsupported
+        notes: "Use Interlocked.Increment(ref field) and subtract one."
+      - java_member: decrementAndGet
+        arg_count: 0
+        kind: unsupported
+        notes: "Use Interlocked.Decrement(ref field)."
+      - java_member: getAndDecrement
+        arg_count: 0
+        kind: unsupported
+        notes: "Use Interlocked.Decrement(ref field) and add one."
+      - java_member: addAndGet
+        arg_count: 1
+        kind: unsupported
+        notes: "Use Interlocked.Add(ref field, $1)."
+      - java_member: getAndAdd
+        arg_count: 1
+        kind: unsupported
+        notes: "Use Interlocked.Add and subtract the added value."
+      - java_member: compareAndSet
+        arg_count: 2
+        kind: unsupported
+        notes: "Use Interlocked.CompareExchange."
+      - java_member: getAndSet
+        arg_count: 1
+        kind: unsupported
+        notes: "Use Interlocked.Exchange."
+
+  - java_class: java.util.concurrent.atomic.AtomicBoolean
+    csharp_class: bool
+    entries:
+      - java_member: get
+        arg_count: 0
+        kind: unsupported
+        notes: "Use Volatile.Read or a lock-protected field."
+      - java_member: set
+        arg_count: 1
+        kind: unsupported
+        notes: "Use Volatile.Write or a lock-protected field."
+      - java_member: compareAndSet
+        arg_count: 2
+        kind: unsupported
+        notes: "Use Interlocked.CompareExchange(ref int) or a lock."
+      - java_member: getAndSet
+        arg_count: 1
+        kind: unsupported
+      - java_member: getAndIncrement
+        arg_count: 0
+        kind: unsupported

@@ -1,6 +1,7 @@
 using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using JavaToCSharp.TypeMapping;
 
 namespace JavaToCSharpGui.ViewModels;
 
@@ -8,9 +9,27 @@ public partial class SettingsWindowViewModel : ViewModelBase
 {
     [ObservableProperty] private string _addUsingInput = "";
 
+    [ObservableProperty] private string _addMappingFileInput = "";
+
     [ObservableProperty] private AvaloniaList<string> _usings = new(CurrentOptions.Options.Usings);
 
+    [ObservableProperty] private AvaloniaList<string> _mappingFiles = new(CurrentOptions.MappingFiles);
+
+    [ObservableProperty] private bool _consoleMapping = CurrentOptions.MappingSpecs.Contains(BuiltInMappingSpec.Console);
+
+    [ObservableProperty] private bool _systemMapping = CurrentOptions.MappingSpecs.Contains(BuiltInMappingSpec.System);
+
+    [ObservableProperty] private bool _collectionsMapping = CurrentOptions.MappingSpecs.Contains(BuiltInMappingSpec.SystemCollections);
+
+    [ObservableProperty] private bool _ioMapping = CurrentOptions.MappingSpecs.Contains(BuiltInMappingSpec.SystemIO);
+
+    [ObservableProperty] private bool _threadingMapping = CurrentOptions.MappingSpecs.Contains(BuiltInMappingSpec.SystemThreading);
+
+    [ObservableProperty] private bool _textMapping = CurrentOptions.MappingSpecs.Contains(BuiltInMappingSpec.SystemText);
+
     [ObservableProperty] private string? _selectedUsing;
+
+    [ObservableProperty] private string? _selectedMappingFile;
 
     [ObservableProperty] private bool _includeUsings = CurrentOptions.Options.IncludeUsings;
 
@@ -53,6 +72,27 @@ public partial class SettingsWindowViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private void RemoveSelectedMappingFile()
+    {
+        if (SelectedMappingFile is not null && MappingFiles.Contains(SelectedMappingFile))
+        {
+            MappingFiles.Remove(SelectedMappingFile);
+        }
+    }
+
+    [RelayCommand]
+    private void AddMappingFile()
+    {
+        var path = AddMappingFileInput.Trim().Trim('"');
+        if (path.Length > 0 && !MappingFiles.Contains(path))
+        {
+            MappingFiles.Add(path);
+        }
+
+        AddMappingFileInput = string.Empty;
+    }
+
+    [RelayCommand]
     private void Save()
     {
         CurrentOptions.Options.IncludeUsings = IncludeUsings;
@@ -68,6 +108,42 @@ public partial class SettingsWindowViewModel : ViewModelBase
         CurrentOptions.Options.LogFilePath = LogFilePath;
 
         CurrentOptions.Options.SetUsings(Usings);
+
+        CurrentOptions.MappingFiles.Clear();
+        CurrentOptions.MappingFiles.AddRange(MappingFiles);
+
+        CurrentOptions.MappingSpecs.Clear();
+        if (ConsoleMapping)
+        {
+            CurrentOptions.MappingSpecs.Add(BuiltInMappingSpec.Console);
+        }
+
+        if (SystemMapping)
+        {
+            CurrentOptions.MappingSpecs.Add(BuiltInMappingSpec.System);
+        }
+
+        if (CollectionsMapping)
+        {
+            CurrentOptions.MappingSpecs.Add(BuiltInMappingSpec.SystemCollections);
+        }
+
+        if (IoMapping)
+        {
+            CurrentOptions.MappingSpecs.Add(BuiltInMappingSpec.SystemIO);
+        }
+
+        if (ThreadingMapping)
+        {
+            CurrentOptions.MappingSpecs.Add(BuiltInMappingSpec.SystemThreading);
+        }
+
+        if (TextMapping)
+        {
+            CurrentOptions.MappingSpecs.Add(BuiltInMappingSpec.SystemText);
+        }
+
+        CurrentOptions.ReloadMappingIndex();
 
         CurrentOptions.Persist();
 

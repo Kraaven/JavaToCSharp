@@ -72,6 +72,7 @@ public class ExpressionStatementVisitor : StatementVisitor<ExpressionStmt>
                 var type = item.getType();
                 arrayRank = type.getArrayLevel();
                 string name = item.getNameAsString();
+                context.DeclareVariable(name, item.getType().toString());
                 if (type.getArrayLevel() > 0)
                 {
                     while (name.EndsWith("[]"))
@@ -80,7 +81,7 @@ public class ExpressionStatementVisitor : StatementVisitor<ExpressionStmt>
                     }
                 }
 
-                var typeSyntax = TypeHelper.ConvertTypeSyntax(commonType, arrayRank ?? 0);
+                var typeSyntax = TypeHelper.ConvertTypeSyntax(context, commonType, arrayRank ?? 0);
 
                 // Convert first so selector hoist (if any) is queued before the declaration
                 var ifElse = SwitchConversion.ConvertSwitchExpression(
@@ -125,6 +126,8 @@ public class ExpressionStatementVisitor : StatementVisitor<ExpressionStmt>
                 }
             }
 
+            context.DeclareVariable(item.getNameAsString(), item.getType().toString());
+
             var initExpr = item.getInitializer().FromOptional<Expression>();
 
             if (initExpr is not null)
@@ -142,7 +145,7 @@ public class ExpressionStatementVisitor : StatementVisitor<ExpressionStmt>
             }
         }
 
-        var typeSyntaxFinal = TypeHelper.ConvertTypeSyntax(commonType, arrayRank ?? 0);
+        var typeSyntaxFinal = TypeHelper.ConvertTypeSyntax(context, commonType, arrayRank ?? 0);
 
         return SyntaxFactory.LocalDeclarationStatement(
             SyntaxFactory.VariableDeclaration(typeSyntaxFinal, SyntaxFactory.SeparatedList(variables, Enumerable.Repeat(SyntaxFactory.Token(SyntaxKind.CommaToken), Math.Max(variables.Count - 1, 0)))));

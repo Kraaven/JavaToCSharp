@@ -34,7 +34,20 @@ public class ConstructorDeclarationVisitor : BodyDeclarationVisitor<ConstructorD
         if (mods.Contains(Modifier.Keyword.PRIVATE))
             ctorSyntax = ctorSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword));
 
-        var parameters = ctorDecl.getParameters().ToList<Parameter>();
+        // Java's package-private default on a nested class constructor means it is
+        // accessible from the enclosing class. In C# a modifier-less constructor on a
+        // public nested class is private, so promote it.
+        if (context.RootTypeName is not null
+            && context.LastTypeName is not null
+            && context.RootTypeName != context.LastTypeName
+            && !mods.Contains(Modifier.Keyword.PUBLIC)
+            && !mods.Contains(Modifier.Keyword.PROTECTED)
+            && !mods.Contains(Modifier.Keyword.PRIVATE))
+        {
+            ctorSyntax = ctorSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword));
+        }
+
+        var parameters = ctorDecl.getParameters().ToList<Parameter>() ?? [];
 
         if (parameters is {Count: > 0})
         {
@@ -47,12 +60,12 @@ public class ConstructorDeclarationVisitor : BodyDeclarationVisitor<ConstructorD
 
                 if (param.isVarArgs())
                 {
-                    paramSyntax = paramSyntax.WithType(TypeHelper.ConvertArrayTypeSyntax(param.getType(), 1))
+                    paramSyntax = paramSyntax.WithType(TypeHelper.ConvertArrayTypeSyntax(context, param.getType(), 1))
                         .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.ParamsKeyword)));
                 }
                 else
                 {
-                    paramSyntax = paramSyntax.WithType(SyntaxFactory.ParseTypeName(TypeHelper.ConvertTypeOf(param)));
+                    paramSyntax = paramSyntax.WithType(SyntaxFactory.ParseTypeName(TypeHelper.ConvertTypeOf(context, param)));
                 }
 
                 paramSyntaxes.Add(paramSyntax);
@@ -70,9 +83,23 @@ public class ConstructorDeclarationVisitor : BodyDeclarationVisitor<ConstructorD
             ctorSyntax = ctorSyntax.WithInitializer(initializer);
         }
 
-        var statementSyntax = StatementVisitor.VisitStatements(context, remainingStatements);
+        context.PushVariableScope();
 
-        ctorSyntax = ctorSyntax.AddBodyStatements(statementSyntax.ToArray());
+        try
+        {
+            foreach (var param in parameters)
+            {
+                context.DeclareVariable(param.getNameAsString(), param.getType().toString());
+            }
+
+            var statementSyntax = StatementVisitor.VisitStatements(context, remainingStatements);
+
+            ctorSyntax = ctorSyntax.AddBodyStatements(statementSyntax.ToArray());
+        }
+        finally
+        {
+            context.PopVariableScope();
+        }
 
         return ctorSyntax;
     }

@@ -73,7 +73,7 @@ internal static class PatternConversion
 
     private static string ConvertPatternType(ConversionContext context, Type type)
     {
-        var typeName = TypeHelper.ConvertType(type.toString());
+        var typeName = TypeHelper.ConvertType(context, type.toString());
         return TypeHelper.ReplaceWildcardsWithTypeParameters(typeName, context.TypeParameterNames);
     }
 }

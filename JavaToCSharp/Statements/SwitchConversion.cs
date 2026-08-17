@@ -210,21 +210,16 @@ public static class SwitchConversion
             var statements = entries[j].getStatements().ToList<Statement>() ?? [];
             foreach (var statement in statements)
             {
-                if (statement is BreakStmt)
-                {
-                    return result;
-                }
-
                 result.AddRange(ConvertCaseStatement(context, statement));
 
-                if (statement is ReturnStmt or ThrowStmt or ContinueStmt or YieldStmt)
+                if (IsCaseTerminating(statement, insideBreakTarget: false))
                 {
-                    return result;
+                    return StripCaseTerminationBreaks(result);
                 }
             }
         }
 
-        return result;
+        return StripCaseTerminationBreaks(result);
     }
 
     private static List<StatementSyntax> ConvertArrowOrStatementBody(
@@ -277,15 +272,15 @@ public static class SwitchConversion
         var result = new List<StatementSyntax>();
         foreach (var statement in statements)
         {
-            if (statement is BreakStmt)
+            result.AddRange(ConvertCaseStatement(context, statement));
+
+            if (IsCaseTerminating(statement, insideBreakTarget: false))
             {
                 break;
             }
-
-            result.AddRange(ConvertCaseStatement(context, statement));
         }
 
-        return result;
+        return StripCaseTerminationBreaks(result);
     }
 
     private static List<StatementSyntax> ConvertBlockStatements(
@@ -335,6 +330,147 @@ public static class SwitchConversion
         }
 
         return [converted];
+    }
+
+    /// <summary>
+    /// Determines whether a Java statement (or a block wrapping one) ends the current case body:
+    /// an unlabeled break/continue outside a loop/switch, or a return/throw/yield at any depth.
+    /// </summary>
+    private static bool IsCaseTerminating(Statement statement, bool insideBreakTarget)
+    {
+        if (statement is BreakStmt or ContinueStmt)
+        {
+            return !insideBreakTarget;
+        }
+
+        if (statement is ReturnStmt or ThrowStmt or YieldStmt)
+        {
+            return true;
+        }
+
+        if (statement is BlockStmt block)
+        {
+            foreach (var inner in block.getStatements().ToList<Statement>() ?? [])
+            {
+                if (IsCaseTerminating(inner, insideBreakTarget))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        switch (statement)
+        {
+            case ForStmt forStmt:
+                return IsCaseTerminating(forStmt.getBody(), insideBreakTarget: true);
+            case ForEachStmt forEachStmt:
+                return IsCaseTerminating(forEachStmt.getBody(), insideBreakTarget: true);
+            case WhileStmt whileStmt:
+                return IsCaseTerminating(whileStmt.getBody(), insideBreakTarget: true);
+            case DoStmt doStmt:
+                return IsCaseTerminating(doStmt.getBody(), insideBreakTarget: true);
+            case SwitchStmt nestedSwitch:
+                foreach (var entry in nestedSwitch.getEntries().ToList<SwitchEntry>() ?? [])
+                {
+                    foreach (var inner in entry.getStatements().ToList<Statement>() ?? [])
+                    {
+                        if (IsCaseTerminating(inner, insideBreakTarget: true))
+                        {
+                            return true;
+                        }
+                    }
+                }
+
+                return false;
+            case IfStmt ifStmt:
+                var thenTerminating = IsCaseTerminating(ifStmt.getThenStmt(), insideBreakTarget);
+                var elseStmt = ifStmt.getElseStmt().FromOptional<Statement>();
+                return elseStmt is not null && thenTerminating && IsCaseTerminating(elseStmt, insideBreakTarget);
+            case LabeledStmt labeled:
+                return IsCaseTerminating(labeled.getStatement(), insideBreakTarget);
+            case TryStmt tryStmt:
+                if (IsCaseTerminating(tryStmt.getTryBlock(), insideBreakTarget))
+                {
+                    return true;
+                }
+
+                foreach (var catchClause in tryStmt.getCatchClauses().ToList<CatchClause>() ?? [])
+                {
+                    if (IsCaseTerminating(catchClause.getBody(), insideBreakTarget))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Removes the unlabeled <c>break;</c> statements that only served to end a Java case body
+    /// (they are invalid C# once the switch becomes an if/else chain). Breaks nested inside
+    /// loops or switch statements are preserved because they still target a real break target.
+    /// </summary>
+    private static List<StatementSyntax> StripCaseTerminationBreaks(IEnumerable<StatementSyntax> statements)
+    {
+        var stripper = new CaseBreakStripper();
+        return statements
+            .Select(s => stripper.Visit(s))
+            .Where(s => s is not null)
+            .Cast<StatementSyntax>()
+            .ToList();
+    }
+
+    private sealed class CaseBreakStripper : CSharpSyntaxRewriter
+    {
+        private int _breakTargetDepth;
+
+        public override SyntaxNode? VisitBreakStatement(BreakStatementSyntax node)
+            => _breakTargetDepth == 0 ? null : node;
+
+        public override SyntaxNode? VisitForStatement(ForStatementSyntax node)
+        {
+            _breakTargetDepth++;
+            var result = base.VisitForStatement(node);
+            _breakTargetDepth--;
+            return result;
+        }
+
+        public override SyntaxNode? VisitForEachStatement(ForEachStatementSyntax node)
+        {
+            _breakTargetDepth++;
+            var result = base.VisitForEachStatement(node);
+            _breakTargetDepth--;
+            return result;
+        }
+
+        public override SyntaxNode? VisitWhileStatement(WhileStatementSyntax node)
+        {
+            _breakTargetDepth++;
+            var result = base.VisitWhileStatement(node);
+            _breakTargetDepth--;
+            return result;
+        }
+
+        public override SyntaxNode? VisitDoStatement(DoStatementSyntax node)
+        {
+            _breakTargetDepth++;
+            var result = base.VisitDoStatement(node);
+            _breakTargetDepth--;
+            return result;
+        }
+
+        public override SyntaxNode? VisitSwitchStatement(SwitchStatementSyntax node)
+        {
+            _breakTargetDepth++;
+            var result = base.VisitSwitchStatement(node);
+            _breakTargetDepth--;
+            return result;
+        }
     }
 
     private static ExpressionSyntax? BuildCondition(

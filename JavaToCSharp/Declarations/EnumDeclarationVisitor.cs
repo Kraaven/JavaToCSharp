@@ -318,14 +318,14 @@ public class EnumDeclarationVisitor : BodyDeclarationVisitor<EnumDeclaration>
             {
                 paramSyntaxes.Add(
                     SyntaxFactory.Parameter(SyntaxFactory.Identifier(paramName))
-                        .WithType(TypeHelper.ConvertArrayTypeSyntax(param.getType(), 1))
+                        .WithType(TypeHelper.ConvertArrayTypeSyntax(context, param.getType(), 1))
                         .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.ParamsKeyword))));
             }
             else
             {
                 paramSyntaxes.Add(
                     SyntaxFactory.Parameter(SyntaxFactory.Identifier(paramName))
-                        .WithType(SyntaxFactory.ParseTypeName(TypeHelper.ConvertTypeOf(param))));
+                        .WithType(SyntaxFactory.ParseTypeName(TypeHelper.ConvertTypeOf(context, param))));
             }
         }
 

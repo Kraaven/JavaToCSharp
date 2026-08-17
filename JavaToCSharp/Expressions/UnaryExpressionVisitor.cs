@@ -53,7 +53,7 @@ public class UnaryExpressionVisitor : ExpressionVisitor<UnaryExpr>
 
         return isPostfix
                    ? SyntaxFactory.PostfixUnaryExpression(kind, exprSyntax)
-                   : SyntaxFactory.PrefixUnaryExpression(kind, exprSyntax);
+                   : WrapLogicalNotIfNeeded(kind, exprSyntax);
     }
 
     private static bool TryConvertToIsNotPattern(ExpressionSyntax exprSyntax, out ExpressionSyntax? result)
@@ -74,5 +74,21 @@ public class UnaryExpressionVisitor : ExpressionVisitor<UnaryExpr>
             isPattern.Expression,
             SyntaxFactory.UnaryPattern(SyntaxFactory.Token(SyntaxKind.NotKeyword), isPattern.Pattern));
         return true;
+    }
+
+    /// <summary>
+    /// Wraps the expression in parentheses when applying logical-not to a binary expression
+    /// (e.g. <c>!(x == 0)</c> rather than the ambiguous <c>!x == 0</c>).
+    /// </summary>
+    private static ExpressionSyntax WrapLogicalNotIfNeeded(SyntaxKind kind, ExpressionSyntax expr)
+    {
+        if (kind == SyntaxKind.LogicalNotExpression
+            && expr is BinaryExpressionSyntax)
+        {
+            return SyntaxFactory.ParenthesizedExpression(
+                SyntaxFactory.PrefixUnaryExpression(kind, expr));
+        }
+
+        return SyntaxFactory.PrefixUnaryExpression(kind, expr);
     }
 }

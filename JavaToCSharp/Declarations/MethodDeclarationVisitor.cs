@@ -35,7 +35,7 @@ public class MethodDeclarationVisitor : BodyDeclarationVisitor<MethodDeclaration
         }
 
         var returnType = methodDecl.getType();
-        var returnTypeName = TypeHelper.ConvertType(returnType.toString());
+        var returnTypeName = TypeHelper.ConvertType(context, returnType.toString());
 
         var methodName = context.PreserveJavaMethodNames
             ? methodDecl.getNameAsString()
@@ -51,7 +51,7 @@ public class MethodDeclarationVisitor : BodyDeclarationVisitor<MethodDeclaration
 
         var methodSyntax = SyntaxFactory.MethodDeclaration(SyntaxFactory.ParseTypeName(returnTypeName), methodName);
 
-        var parameters = methodDecl.getParameters().ToList<Parameter>();
+        var parameters = methodDecl.getParameters().ToList<Parameter>() ?? [];
 
         if (parameters is {Count: > 0})
         {
@@ -59,7 +59,7 @@ public class MethodDeclarationVisitor : BodyDeclarationVisitor<MethodDeclaration
                 SyntaxFactory.Parameter(
                     attributeLists: [],
                     modifiers: SyntaxFactory.TokenList(),
-                    type: SyntaxFactory.ParseTypeName(TypeHelper.ConvertTypeOf(i)),
+                    type: SyntaxFactory.ParseTypeName(TypeHelper.ConvertTypeOf(context, i)),
                     identifier: SyntaxFactory.Identifier(TypeHelper.EscapeIdentifier(i.getNameAsString())),
                     @default: null))
                 .ToArray();
@@ -81,7 +81,7 @@ public class MethodDeclarationVisitor : BodyDeclarationVisitor<MethodDeclaration
         IReadOnlyList<ClassOrInterfaceType> extends)
     {
         var returnType = methodDecl.getType();
-        var returnTypeName = TypeHelper.ConvertType(returnType.toString());
+        var returnTypeName = TypeHelper.ConvertType(context, returnType.toString());
 
         var methodName = context.PreserveJavaMethodNames
             ? methodDecl.getNameAsString()
@@ -153,7 +153,7 @@ public class MethodDeclarationVisitor : BodyDeclarationVisitor<MethodDeclaration
             && !typeModifiers.Any(i => i.IsKind(SyntaxKind.SealedKeyword)))
             methodSyntax = methodSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.VirtualKeyword));
 
-        var parameters = methodDecl.getParameters().ToList<Parameter>();
+        var parameters = methodDecl.getParameters().ToList<Parameter>() ?? [];
 
         if (parameters is {Count: > 0})
         {
@@ -178,7 +178,7 @@ public class MethodDeclarationVisitor : BodyDeclarationVisitor<MethodDeclaration
                 var paramSyntax = SyntaxFactory.Parameter(
                     attributeLists: [],
                     modifiers: modifiers,
-                    type: TypeHelper.ConvertTypeSyntax(type, arrayLevel),
+                    type: TypeHelper.ConvertTypeSyntax(context, type, arrayLevel),
                     identifier: SyntaxFactory.Identifier(identifier),
                     @default: null);
 
@@ -198,23 +198,37 @@ public class MethodDeclarationVisitor : BodyDeclarationVisitor<MethodDeclaration
             return methodSyntax;
         }
 
-        var statements = block.getStatements().ToList<Statement>();
+        context.PushVariableScope();
 
-        var statementSyntax = StatementVisitor.VisitStatements(context, statements);
-
-        if (mods.Contains(Modifier.Keyword.SYNCHRONIZED))
+        try
         {
-            var lockBlock = SyntaxFactory.Block(statementSyntax);
+            foreach (var param in parameters)
+            {
+                context.DeclareVariable(param.getNameAsString(), param.getType().toString());
+            }
 
-            var lockSyntax = mods.Contains(Modifier.Keyword.STATIC)
-                ? SyntaxFactory.LockStatement(SyntaxFactory.TypeOfExpression(SyntaxFactory.ParseTypeName(typeIdentifier)), lockBlock)
-                : SyntaxFactory.LockStatement(SyntaxFactory.ThisExpression(), lockBlock);
+            var statements = block.getStatements().ToList<Statement>();
 
-            methodSyntax = methodSyntax.AddBodyStatements(lockSyntax);
+            var statementSyntax = StatementVisitor.VisitStatements(context, statements);
+
+            if (mods.Contains(Modifier.Keyword.SYNCHRONIZED))
+            {
+                var lockBlock = SyntaxFactory.Block(statementSyntax);
+
+                var lockSyntax = mods.Contains(Modifier.Keyword.STATIC)
+                    ? SyntaxFactory.LockStatement(SyntaxFactory.TypeOfExpression(SyntaxFactory.ParseTypeName(typeIdentifier)), lockBlock)
+                    : SyntaxFactory.LockStatement(SyntaxFactory.ThisExpression(), lockBlock);
+
+                methodSyntax = methodSyntax.AddBodyStatements(lockSyntax);
+            }
+            else
+            {
+                methodSyntax = methodSyntax.AddBodyStatements(statementSyntax.ToArray());
+            }
         }
-        else
+        finally
         {
-            methodSyntax = methodSyntax.AddBodyStatements(statementSyntax.ToArray());
+            context.PopVariableScope();
         }
 
         return methodSyntax;

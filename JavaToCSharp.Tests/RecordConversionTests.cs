@@ -109,6 +109,7 @@ public record Person<T extends Number>(
             IncludeNamespace = false,
             IncludeUsings = false,
             IncludeComments = false,
+            PreserveJavaMethodNames = false,
         }).ConvertedText;
 
         Assert.NotNull(parsed);
@@ -141,11 +142,11 @@ public record Person<T extends Number>(
         Assert.Contains("count++", parsed);
         Assert.Contains(": this(name, 0, default)", parsed);
 
-        // Record methods keep Java casing for cross-file use
+        // Record methods keep Java casing for cross-file use (first-letter casing preserved by PreserveJavaMethodNames in record context)
         Assert.Contains("public string greeting()", parsed);
         Assert.Contains("public static int getCount()", parsed);
         Assert.Contains("public U something<U>(U value)", parsed);
-        Assert.Contains("public int compareTo(Person<T> other)", parsed);
+        Assert.Contains("public int CompareTo(Person<T> other)", parsed);
 
         Assert.Contains("is not Person<T> other", parsed);
         Assert.Contains("override bool Equals", parsed);

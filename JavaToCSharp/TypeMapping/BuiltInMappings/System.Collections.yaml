@@ -1,0 +1,823 @@
+# Built-in mapping spec: java.util collections -> System.Collections
+#
+# Class-level renames map Java collection interfaces/classes to their C# generic
+# counterparts. Member entries on the interfaces let member calls resolve on
+# interface-typed variables (e.g. List<T> l; l.add(...)); the concrete classes
+# add their own members as well.
+namespaces:
+  - java_packages: [java.util]
+    csharp_packages: [System.Collections.Generic]
+
+class_map:
+  - java_class: java.util.List
+    csharp_class: IList
+    generic: true
+    kind: interface
+    entries:
+      - java_member: size
+        arg_count: 0
+        kind: property
+        csharp_member: Count
+      - java_member: isEmpty
+        arg_count: 0
+        kind: template
+        expression: "$0.Count == 0"
+      - java_member: add
+        arg_count: 1
+        kind: rename
+        csharp_member: Add
+      - java_member: add
+        arg_count: 2
+        kind: rename
+        csharp_member: Insert
+        notes: "Java add(index, element) becomes Insert(index, element)."
+      - java_member: get
+        arg_count: 1
+        kind: template
+        expression: "$0[$1]"
+      - java_member: set
+        arg_count: 2
+        kind: template
+        expression: "$0[$1] = $2"
+      - java_member: remove
+        arg_count: 1
+        kind: rename
+        csharp_member: Remove
+      - java_member: remove
+        arg_count: 2
+        kind: rename
+        csharp_member: RemoveAt
+        notes: "Java remove(int index) becomes RemoveAt(index)."
+      - java_member: contains
+        arg_count: 1
+        kind: rename
+        csharp_member: Contains
+      - java_member: indexOf
+        arg_count: 1
+        kind: rename
+        csharp_member: IndexOf
+      - java_member: lastIndexOf
+        arg_count: 1
+        kind: rename
+        csharp_member: LastIndexOf
+      - java_member: clear
+        arg_count: 0
+        kind: rename
+        csharp_member: Clear
+      - java_member: iterator
+        arg_count: 0
+        kind: template
+        expression: "$0.GetEnumerator()"
+      - java_member: forEach
+        arg_count: 1
+        kind: rename
+        csharp_member: ForEach
+      - java_member: toArray
+        arg_count: 0
+        kind: unsupported
+        notes: "Use $0.ToArray()."
+      - java_member: stream
+        arg_count: 0
+        kind: unsupported
+        notes: "Use $0.AsEnumerable() (add using System.Linq) or convert the pipeline manually."
+      - java_member: sort
+        arg_count: 1
+        kind: unsupported
+        notes: "Use $0.Sort() or $0.Sort(comparison)."
+
+  - java_class: java.util.ArrayList
+    csharp_class: List
+    generic: true
+    entries:
+      - java_member: size
+        arg_count: 0
+        kind: property
+        csharp_member: Count
+      - java_member: isEmpty
+        arg_count: 0
+        kind: template
+        expression: "$0.Count == 0"
+      - java_member: add
+        arg_count: 1
+        kind: rename
+        csharp_member: Add
+      - java_member: add
+        arg_count: 2
+        kind: rename
+        csharp_member: Insert
+        notes: "Java add(index, element) becomes Insert(index, element)."
+      - java_member: get
+        arg_count: 1
+        kind: template
+        expression: "$0[$1]"
+      - java_member: set
+        arg_count: 2
+        kind: template
+        expression: "$0[$1] = $2"
+      - java_member: remove
+        arg_count: 1
+        kind: rename
+        csharp_member: Remove
+      - java_member: remove
+        arg_count: 2
+        kind: rename
+        csharp_member: RemoveAt
+        notes: "Java remove(int index) becomes RemoveAt(index)."
+      - java_member: contains
+        arg_count: 1
+        kind: rename
+        csharp_member: Contains
+      - java_member: indexOf
+        arg_count: 1
+        kind: rename
+        csharp_member: IndexOf
+      - java_member: lastIndexOf
+        arg_count: 1
+        kind: rename
+        csharp_member: LastIndexOf
+      - java_member: clear
+        arg_count: 0
+        kind: rename
+        csharp_member: Clear
+      - java_member: iterator
+        arg_count: 0
+        kind: template
+        expression: "$0.GetEnumerator()"
+      - java_member: forEach
+        arg_count: 1
+        kind: rename
+        csharp_member: ForEach
+      - java_member: addAll
+        arg_count: 1
+        kind: template
+        expression: "$0.AddRange($1)"
+        confidence: medium
+        notes: "ICollection<T> has no AddRange; requires a List<T> receiver."
+      - java_member: toArray
+        arg_count: 0
+        kind: unsupported
+        notes: "Use $0.ToArray()."
+      - java_member: stream
+        arg_count: 0
+        kind: unsupported
+        notes: "Use $0.AsEnumerable() (add using System.Linq) or convert the pipeline manually."
+      - java_member: sort
+        arg_count: 1
+        kind: unsupported
+        notes: "Use $0.Sort() or $0.Sort(comparison)."
+
+  - java_class: java.util.LinkedList
+    csharp_class: LinkedList
+    generic: true
+
+  - java_class: java.util.Vector
+    csharp_class: List
+    generic: true
+    entries:
+      - java_member: size
+        arg_count: 0
+        kind: property
+        csharp_member: Count
+      - java_member: isEmpty
+        arg_count: 0
+        kind: template
+        expression: "$0.Count == 0"
+      - java_member: add
+        arg_count: 1
+        kind: rename
+        csharp_member: Add
+      - java_member: get
+        arg_count: 1
+        kind: template
+        expression: "$0[$1]"
+      - java_member: set
+        arg_count: 2
+        kind: template
+        expression: "$0[$1] = $2"
+      - java_member: remove
+        arg_count: 1
+        kind: rename
+        csharp_member: Remove
+      - java_member: contains
+        arg_count: 1
+        kind: rename
+        csharp_member: Contains
+      - java_member: clear
+        arg_count: 0
+        kind: rename
+        csharp_member: Clear
+
+  - java_class: java.util.Stack
+    csharp_class: Stack
+    generic: true
+    entries:
+      - java_member: push
+        arg_count: 1
+        kind: rename
+        csharp_member: Push
+      - java_member: pop
+        arg_count: 0
+        kind: rename
+        csharp_member: Pop
+      - java_member: peek
+        arg_count: 0
+        kind: rename
+        csharp_member: Peek
+      - java_member: empty
+        arg_count: 0
+        kind: template
+        expression: "$0.Count == 0"
+      - java_member: search
+        arg_count: 1
+        kind: unsupported
+
+  - java_class: java.util.Set
+    csharp_class: ISet
+    generic: true
+    kind: interface
+    entries:
+      - java_member: add
+        arg_count: 1
+        kind: rename
+        csharp_member: Add
+      - java_member: remove
+        arg_count: 1
+        kind: rename
+        csharp_member: Remove
+      - java_member: contains
+        arg_count: 1
+        kind: rename
+        csharp_member: Contains
+      - java_member: size
+        arg_count: 0
+        kind: property
+        csharp_member: Count
+      - java_member: isEmpty
+        arg_count: 0
+        kind: template
+        expression: "$0.Count == 0"
+      - java_member: clear
+        arg_count: 0
+        kind: rename
+        csharp_member: Clear
+      - java_member: iterator
+        arg_count: 0
+        kind: template
+        expression: "$0.GetEnumerator()"
+      - java_member: addAll
+        arg_count: 1
+        kind: template
+        expression: "$0.UnionWith($1)"
+        notes: "Java addAll() becomes UnionWith for sets."
+      - java_member: retainAll
+        arg_count: 1
+        kind: template
+        expression: "$0.IntersectWith($1)"
+      - java_member: removeAll
+        arg_count: 1
+        kind: template
+        expression: "$0.ExceptWith($1)"
+      - java_member: toArray
+        arg_count: 0
+        kind: unsupported
+        notes: "Use $0.ToArray()."
+
+  - java_class: java.util.HashSet
+    csharp_class: HashSet
+    generic: true
+    entries:
+      - java_member: add
+        arg_count: 1
+        kind: rename
+        csharp_member: Add
+      - java_member: remove
+        arg_count: 1
+        kind: rename
+        csharp_member: Remove
+      - java_member: contains
+        arg_count: 1
+        kind: rename
+        csharp_member: Contains
+      - java_member: size
+        arg_count: 0
+        kind: property
+        csharp_member: Count
+      - java_member: isEmpty
+        arg_count: 0
+        kind: template
+        expression: "$0.Count == 0"
+      - java_member: clear
+        arg_count: 0
+        kind: rename
+        csharp_member: Clear
+      - java_member: iterator
+        arg_count: 0
+        kind: template
+        expression: "$0.GetEnumerator()"
+      - java_member: addAll
+        arg_count: 1
+        kind: template
+        expression: "$0.UnionWith($1)"
+        notes: "Java addAll() becomes UnionWith for sets."
+      - java_member: retainAll
+        arg_count: 1
+        kind: template
+        expression: "$0.IntersectWith($1)"
+      - java_member: removeAll
+        arg_count: 1
+        kind: template
+        expression: "$0.ExceptWith($1)"
+      - java_member: toArray
+        arg_count: 0
+        kind: unsupported
+        notes: "Use $0.ToArray()."
+
+  - java_class: java.util.LinkedHashSet
+    csharp_class: HashSet
+    generic: true
+    entries:
+      - java_member: add
+        arg_count: 1
+        kind: rename
+        csharp_member: Add
+      - java_member: contains
+        arg_count: 1
+        kind: rename
+        csharp_member: Contains
+      - java_member: size
+        arg_count: 0
+        kind: property
+        csharp_member: Count
+
+  - java_class: java.util.TreeSet
+    csharp_class: SortedSet
+    generic: true
+    entries:
+      - java_member: add
+        arg_count: 1
+        kind: rename
+        csharp_member: Add
+      - java_member: remove
+        arg_count: 1
+        kind: rename
+        csharp_member: Remove
+      - java_member: contains
+        arg_count: 1
+        kind: rename
+        csharp_member: Contains
+      - java_member: size
+        arg_count: 0
+        kind: property
+        csharp_member: Count
+      - java_member: isEmpty
+        arg_count: 0
+        kind: template
+        expression: "$0.Count == 0"
+      - java_member: clear
+        arg_count: 0
+        kind: rename
+        csharp_member: Clear
+      - java_member: first
+        arg_count: 0
+        kind: property
+        csharp_member: Min
+      - java_member: last
+        arg_count: 0
+        kind: property
+        csharp_member: Max
+
+  - java_class: java.util.Map
+    csharp_class: IDictionary
+    generic: true
+    kind: interface
+    entries:
+      - java_member: size
+        arg_count: 0
+        kind: property
+        csharp_member: Count
+      - java_member: isEmpty
+        arg_count: 0
+        kind: template
+        expression: "$0.Count == 0"
+      - java_member: put
+        arg_count: 2
+        kind: template
+        expression: "$0[$1] = $2"
+      - java_member: get
+        arg_count: 1
+        kind: template
+        expression: "$0[$1]"
+        notes: "C# indexers throw KeyNotFoundException for missing keys; Java get() returns null."
+      - java_member: containsKey
+        arg_count: 1
+        kind: rename
+        csharp_member: ContainsKey
+      - java_member: containsValue
+        arg_count: 1
+        kind: rename
+        csharp_member: ContainsValue
+      - java_member: remove
+        arg_count: 1
+        kind: rename
+        csharp_member: Remove
+      - java_member: clear
+        arg_count: 0
+        kind: rename
+        csharp_member: Clear
+      - java_member: keySet
+        arg_count: 0
+        kind: property
+        csharp_member: Keys
+      - java_member: values
+        arg_count: 0
+        kind: property
+        csharp_member: Values
+      - java_member: entrySet
+        arg_count: 0
+        kind: unsupported
+        notes: "Iterate KeyValuePair<K,V> with foreach instead."
+      - java_member: getOrDefault
+        arg_count: 2
+        kind: unsupported
+        notes: "Use TryGetValue or TryAdd."
+
+  - java_class: java.util.Map.Entry
+    csharp_class: KeyValuePair
+    generic: true
+    entries:
+      - java_member: getKey
+        arg_count: 0
+        kind: property
+        csharp_member: Key
+      - java_member: getValue
+        arg_count: 0
+        kind: property
+        csharp_member: Value
+
+  - java_class: java.util.HashMap
+    csharp_class: Dictionary
+    generic: true
+    entries:
+      - java_member: size
+        arg_count: 0
+        kind: property
+        csharp_member: Count
+      - java_member: isEmpty
+        arg_count: 0
+        kind: template
+        expression: "$0.Count == 0"
+      - java_member: put
+        arg_count: 2
+        kind: template
+        expression: "$0[$1] = $2"
+      - java_member: get
+        arg_count: 1
+        kind: template
+        expression: "$0[$1]"
+        notes: "C# indexers throw KeyNotFoundException for missing keys; Java get() returns null."
+      - java_member: containsKey
+        arg_count: 1
+        kind: rename
+        csharp_member: ContainsKey
+      - java_member: containsValue
+        arg_count: 1
+        kind: rename
+        csharp_member: ContainsValue
+      - java_member: remove
+        arg_count: 1
+        kind: rename
+        csharp_member: Remove
+      - java_member: clear
+        arg_count: 0
+        kind: rename
+        csharp_member: Clear
+      - java_member: keySet
+        arg_count: 0
+        kind: property
+        csharp_member: Keys
+      - java_member: values
+        arg_count: 0
+        kind: property
+        csharp_member: Values
+      - java_member: entrySet
+        arg_count: 0
+        kind: unsupported
+        notes: "Iterate KeyValuePair<K,V> with foreach instead."
+      - java_member: putAll
+        arg_count: 1
+        kind: unsupported
+        notes: "Use a foreach loop or a Dictionary constructor for bulk copy."
+      - java_member: getOrDefault
+        arg_count: 2
+        kind: unsupported
+        notes: "Use TryGetValue or TryAdd."
+
+  - java_class: java.util.LinkedHashMap
+    csharp_class: Dictionary
+    generic: true
+    entries:
+      - java_member: size
+        arg_count: 0
+        kind: property
+        csharp_member: Count
+      - java_member: put
+        arg_count: 2
+        kind: template
+        expression: "$0[$1] = $2"
+      - java_member: get
+        arg_count: 1
+        kind: template
+        expression: "$0[$1]"
+      - java_member: containsKey
+        arg_count: 1
+        kind: rename
+        csharp_member: ContainsKey
+      - java_member: clear
+        arg_count: 0
+        kind: rename
+        csharp_member: Clear
+
+  - java_class: java.util.TreeMap
+    csharp_class: SortedDictionary
+    generic: true
+    entries:
+      - java_member: size
+        arg_count: 0
+        kind: property
+        csharp_member: Count
+      - java_member: put
+        arg_count: 2
+        kind: template
+        expression: "$0[$1] = $2"
+      - java_member: get
+        arg_count: 1
+        kind: template
+        expression: "$0[$1]"
+      - java_member: containsKey
+        arg_count: 1
+        kind: rename
+        csharp_member: ContainsKey
+      - java_member: firstKey
+        arg_count: 0
+        kind: template
+        expression: "$0.Keys.First()"
+        confidence: medium
+        notes: "Requires using System.Linq."
+      - java_member: lastKey
+        arg_count: 0
+        kind: template
+        expression: "$0.Keys.Last()"
+        confidence: medium
+        notes: "Requires using System.Linq."
+      - java_member: clear
+        arg_count: 0
+        kind: rename
+        csharp_member: Clear
+
+  - java_class: java.util.Hashtable
+    csharp_class: Dictionary
+    generic: true
+
+  - java_class: java.util.Collection
+    csharp_class: ICollection
+    generic: true
+    kind: interface
+    entries:
+      - java_member: add
+        arg_count: 1
+        kind: rename
+        csharp_member: Add
+      - java_member: remove
+        arg_count: 1
+        kind: rename
+        csharp_member: Remove
+      - java_member: contains
+        arg_count: 1
+        kind: rename
+        csharp_member: Contains
+      - java_member: size
+        arg_count: 0
+        kind: property
+        csharp_member: Count
+      - java_member: isEmpty
+        arg_count: 0
+        kind: template
+        expression: "$0.Count == 0"
+      - java_member: clear
+        arg_count: 0
+        kind: rename
+        csharp_member: Clear
+      - java_member: iterator
+        arg_count: 0
+        kind: template
+        expression: "$0.GetEnumerator()"
+      - java_member: toArray
+        arg_count: 0
+        kind: unsupported
+        notes: "Use $0.ToArray()."
+      - java_member: stream
+        arg_count: 0
+        kind: unsupported
+        notes: "Use $0.AsEnumerable() (add using System.Linq) or convert the pipeline manually."
+
+  - java_class: java.util.Iterator
+    csharp_class: IEnumerator
+    generic: true
+    kind: interface
+    entries:
+      - java_member: next
+        arg_count: 0
+        kind: property
+        csharp_member: Current
+        confidence: medium
+        notes: "C# enumerators advance with MoveNext(); the Current property only reads the current element."
+      - java_member: hasNext
+        arg_count: 0
+        kind: unsupported
+        notes: "C# enumerators combine checking and advancing in MoveNext(). Rewrite the loop as while (enumerator.MoveNext())."
+      - java_member: remove
+        arg_count: 0
+        kind: unsupported
+
+  - java_class: java.util.Iterable
+    csharp_class: IEnumerable
+    generic: true
+    kind: interface
+
+  - java_class: java.util.Collections
+    csharp_class: Collections
+    entries:
+      - java_member: sort
+        arg_count: 1
+        kind: template
+        expression: "$1.Sort()"
+      - java_member: sort
+        arg_count: 2
+        kind: unsupported
+        notes: "Use $1.Sort(comparison) with a Comparison<T> delegate."
+      - java_member: reverse
+        arg_count: 1
+        kind: template
+        expression: "$1.Reverse()"
+        confidence: medium
+        notes: "List<T>.Reverse() works in place; LinkedList<T> has no Reverse."
+      - java_member: shuffle
+        arg_count: 1
+        kind: unsupported
+        notes: "Implement a Fisher-Yates shuffle over the list."
+      - java_member: min
+        arg_count: 1
+        kind: unsupported
+        notes: "Use $1.Min() (add using System.Linq)."
+      - java_member: max
+        arg_count: 1
+        kind: unsupported
+        notes: "Use $1.Max() (add using System.Linq)."
+      - java_member: emptyList
+        arg_count: 0
+        kind: unsupported
+        notes: "Use Array.Empty<T>() or a collection expression []."
+      - java_member: emptyMap
+        arg_count: 0
+        kind: unsupported
+        notes: "Use a collection expression [] for dictionaries."
+      - java_member: emptySet
+        arg_count: 0
+        kind: unsupported
+        notes: "Use Array.Empty<T>() or a collection expression []."
+      - java_member: singleton
+        arg_count: 1
+        kind: template
+        expression: "new[] { $1 }"
+        confidence: medium
+        notes: "Emits a single-element array; adjust the target type as needed."
+      - java_member: singletonList
+        arg_count: 1
+        kind: template
+        expression: "new[] { $1 }"
+        confidence: medium
+        notes: "Emits a single-element array, not a List; adjust the target type as needed."
+      - java_member: singletonMap
+        arg_count: 1
+        kind: unsupported
+      - java_member: unmodifiableList
+        arg_count: 1
+        kind: unsupported
+        notes: "Use List<T>.AsReadOnly() or a ReadOnlyCollection<T>."
+      - java_member: synchronizedList
+        arg_count: 1
+        kind: unsupported
+        notes: "Use ConcurrentBag<T>/lock or System.Collections.Concurrent types."
+      - java_member: addAll
+        arg_count: 2
+        kind: unsupported
+        notes: "Use $1.AddRange(...) or a foreach loop."
+      - java_member: copy
+        arg_count: 2
+        kind: unsupported
+      - java_member: fill
+        arg_count: 2
+        kind: unsupported
+      - java_member: frequency
+        arg_count: 2
+        kind: unsupported
+        notes: "Use $1.Count(x => Equals(x, $2)) (add using System.Linq)."
+      - java_member: swap
+        arg_count: 3
+        kind: unsupported
+        notes: "Use tuple deconstruction: (list[i], list[j]) = (list[j], list[i])."
+      - java_member: binarySearch
+        arg_count: 2
+        kind: unsupported
+        notes: "Use List<T>.BinarySearch(item) on a sorted list."
+      - java_member: reverseOrder
+        arg_count: 0
+        kind: unsupported
+
+  - java_class: java.util.Arrays
+    csharp_class: Array
+    entries:
+      - java_member: sort
+        arg_count: 1
+        kind: template
+        expression: "Array.Sort($1)"
+      - java_member: sort
+        arg_count: 2
+        kind: unsupported
+        notes: "Use Array.Sort with a Comparison<T> delegate."
+      - java_member: fill
+        arg_count: 2
+        kind: template
+        expression: "Array.Fill($1, $2)"
+      - java_member: fill
+        arg_count: 3
+        kind: unsupported
+      - java_member: copyOf
+        arg_count: 2
+        kind: template
+        expression: "$1[..$2]"
+        confidence: medium
+        notes: "Range slicing copies a subset; verify boundary semantics."
+      - java_member: copyOfRange
+        arg_count: 3
+        kind: unsupported
+      - java_member: asList
+        arg_count: variadic
+        kind: unsupported
+        notes: "Use a collection expression [] or new List<T> { ... }."
+      - java_member: binarySearch
+        arg_count: 2
+        kind: unsupported
+        notes: "Use Array.BinarySearch($1, $2)."
+      - java_member: equals
+        arg_count: 2
+        kind: unsupported
+        notes: "Use $1.SequenceEqual($2) (add using System.Linq)."
+      - java_member: deepEquals
+        arg_count: 2
+        kind: unsupported
+      - java_member: hashCode
+        arg_count: 1
+        kind: unsupported
+        notes: "Use System.HashCode or a manual aggregate."
+      - java_member: toString
+        arg_count: 1
+        kind: unsupported
+        notes: "Use string.Join(',', $1)."
+
+  - java_class: java.util.Objects
+    csharp_class: object
+    entries:
+      - java_member: equals
+        arg_count: 2
+        kind: template
+        expression: "object.Equals($1, $2)"
+      - java_member: hashCode
+        arg_count: 1
+        kind: template
+        expression: "$1?.GetHashCode() ?? 0"
+        confidence: medium
+        notes: "Java's Object.hashCode differs from .NET's GetHashCode for strings; review if hashing matters."
+      - java_member: requireNonNull
+        arg_count: 1
+        kind: template
+        expression: "System.ArgumentNullException.ThrowIfNull($1)"
+      - java_member: requireNonNull
+        arg_count: 2
+        kind: unsupported
+      - java_member: toString
+        arg_count: 1
+        kind: template
+        expression: '$1?.ToString() ?? "null"'
+        confidence: medium
+      - java_member: isNull
+        arg_count: 1
+        kind: template
+        expression: "$1 is null"
+      - java_member: nonNull
+        arg_count: 1
+        kind: template
+        expression: "$1 is not null"
+      - java_member: deepEquals
+        arg_count: 2
+        kind: unsupported

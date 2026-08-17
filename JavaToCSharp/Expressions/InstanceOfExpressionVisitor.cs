@@ -21,7 +21,7 @@ public class InstanceOfExpressionVisitor : ExpressionVisitor<InstanceOfExpr>
             return PatternConversion.PatternToIsCondition(context, exprSyntax, pattern);
         }
 
-        var type = TypeHelper.ConvertTypeOf(expr);
+        var type = TypeHelper.ConvertTypeOf(context, expr);
         type = TypeHelper.ReplaceWildcardsWithTypeParameters(type, context.TypeParameterNames);
 
         return SyntaxFactory.BinaryExpression(

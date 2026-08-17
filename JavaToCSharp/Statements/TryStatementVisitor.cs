@@ -1,4 +1,5 @@
 ﻿using com.github.javaparser;
+using com.github.javaparser.ast.body;
 using com.github.javaparser.ast.expr;
 using com.github.javaparser.ast.stmt;
 using com.github.javaparser.ast.type;
@@ -17,70 +18,90 @@ public class TryStatementVisitor : StatementVisitor<TryStmt>
         var tryBlock = tryStmt.getTryBlock();
         var tryStatements = tryBlock.getStatements().ToList<Statement>();
 
-        var tryConverted = VisitStatements(context, tryStatements);
-        var tryBlockStatements = tryConverted.ToArray();
+        context.PushVariableScope();
 
-        if (resources.Count == 0)
+        try
         {
-            // regular try statement
-            return TransformTryBlock(context, tryStmt, tryBlockStatements);
-        }
-
-        // try-with-resources statement
-
-        // for inner-most using block, use the statements from the Java try block
-        StatementSyntax result = SyntaxFactory.Block(tryBlockStatements);
-
-        // go inner-most to outer-most
-        resources.Reverse();
-
-        foreach (var resource in resources)
-        {
-            if (resource.isNameExpr())
+            foreach (var resource in resources)
             {
-                result = SyntaxFactory.UsingStatement(result)
-                    .WithExpression(
-                        SyntaxFactory.IdentifierName(resource.asNameExpr().getNameAsString()));
-            }
-            else if (resource.isVariableDeclarationExpr())
-            {
-                var varDecl = resource.asVariableDeclarationExpr();
-
-                if (varDecl.getVariables().size() > 1)
+                if (resource.isVariableDeclarationExpr())
                 {
-                    context.Warning("Unexpected multiple variables in try-with-resources declaration",
+                    foreach (var variable in resource.asVariableDeclarationExpr().getVariables()?.ToList<VariableDeclarator>() ?? [])
+                    {
+                        context.DeclareVariable(variable.getNameAsString(), variable.getType().toString());
+                    }
+                }
+            }
+
+            var tryConverted = VisitStatements(context, tryStatements);
+            var tryBlockStatements = tryConverted.ToArray();
+
+            if (resources.Count == 0)
+            {
+                // regular try statement
+                return TransformTryBlock(context, tryStmt, tryBlockStatements);
+            }
+
+            // try-with-resources statement
+
+            // for inner-most using block, use the statements from the Java try block
+            StatementSyntax result = SyntaxFactory.Block(tryBlockStatements);
+
+            // go inner-most to outer-most
+            resources.Reverse();
+
+            foreach (var resource in resources)
+            {
+                if (resource.isNameExpr())
+                {
+                    result = SyntaxFactory.UsingStatement(result)
+                        .WithExpression(
+                            SyntaxFactory.IdentifierName(resource.asNameExpr().getNameAsString()));
+                }
+                else if (resource.isVariableDeclarationExpr())
+                {
+                    var varDecl = resource.asVariableDeclarationExpr();
+
+                    if (varDecl.getVariables().size() > 1)
+                    {
+                        context.Warning("Unexpected multiple variables in try-with-resources declaration",
+                            resource.getBegin().FromRequiredOptional<Position>().line);
+                    }
+
+                    var variable = varDecl.getVariable(0);
+                    var variableInit = variable.getInitializer().FromRequiredOptional<Expression>();
+
+                    var initSyntax = ExpressionVisitor.VisitExpression(context, variableInit)
+                                     ?? throw new InvalidOperationException("Unable to parse try-with-resources variable initializer");
+
+                    result = SyntaxFactory.UsingStatement(result)
+                        .WithDeclaration(
+                            SyntaxFactory.VariableDeclaration(
+                                SyntaxFactory.ParseTypeName(TypeHelper.ConvertType(context, variable.getType())),
+                                SyntaxFactory.SeparatedList([
+                                    SyntaxFactory.VariableDeclarator(variable.getNameAsString())
+                                        .WithInitializer(SyntaxFactory.EqualsValueClause(initSyntax))
+                                ])
+                            ));
+                }
+                else
+                {
+                    context.Warning("Unexpected try-with-resources resource",
                         resource.getBegin().FromRequiredOptional<Position>().line);
                 }
-
-                var variable = varDecl.getVariable(0);
-                var variableInit = variable.getInitializer().FromRequiredOptional<Expression>();
-
-                var initSyntax = ExpressionVisitor.VisitExpression(context, variableInit)
-                                 ?? throw new InvalidOperationException("Unable to parse try-with-resources variable initializer");
-
-                result = SyntaxFactory.UsingStatement(result)
-                    .WithDeclaration(
-                        SyntaxFactory.VariableDeclaration(
-                            SyntaxFactory.ParseTypeName(TypeHelper.ConvertType(variable.getType())),
-                            SyntaxFactory.SeparatedList([
-                                SyntaxFactory.VariableDeclarator(variable.getNameAsString())
-                                    .WithInitializer(SyntaxFactory.EqualsValueClause(initSyntax))
-                            ])
-                        ));
             }
-            else
+
+            if (tryStmt.getFinallyBlock().isPresent() || tryStmt.getCatchClauses().ToList<CatchClause>()?.Count > 0)
             {
-                context.Warning("Unexpected try-with-resources resource",
-                    resource.getBegin().FromRequiredOptional<Position>().line);
+                result = TransformTryBlock(context, tryStmt, [result]);
             }
-        }
 
-        if (tryStmt.getFinallyBlock().isPresent() || tryStmt.getCatchClauses().ToList<CatchClause>()?.Count > 0)
+            return result;
+        }
+        finally
         {
-            result = TransformTryBlock(context, tryStmt, [result]);
+            context.PopVariableScope();
         }
-
-        return result;
     }
 
     private static TryStatementSyntax TransformTryBlock(ConversionContext context, TryStmt tryStmt,
@@ -134,22 +155,32 @@ public class TryStatementVisitor : StatementVisitor<TryStmt>
     {
         var block = ctch.getBody();
         var catchStatements = block.getStatements().ToList<Statement>();
-        var catchConverted = VisitStatements(context, catchStatements);
-        var catchBlockSyntax = SyntaxFactory.Block(catchConverted);
 
-        var type = TypeHelper.ConvertType(typeName);
+        context.PushVariableScope();
 
-        trySyn = trySyn.AddCatches(
-            SyntaxFactory.CatchClause(
-                SyntaxFactory.CatchDeclaration(
-                    SyntaxFactory.ParseTypeName(type),
-                    SyntaxFactory.Identifier(TypeHelper.EscapeIdentifier(ctch.getParameter().getNameAsString()))
-                ),
-                filter: null,
-                block: catchBlockSyntax
-            )
-        );
+        try
+        {
+            context.DeclareVariable(ctch.getParameter().getNameAsString(), typeName);
 
-        return trySyn;
+            var catchConverted = VisitStatements(context, catchStatements);
+            var catchBlockSyntax = SyntaxFactory.Block(catchConverted);
+
+            var type = TypeHelper.ConvertType(context, typeName);
+
+            return trySyn.AddCatches(
+                SyntaxFactory.CatchClause(
+                    SyntaxFactory.CatchDeclaration(
+                        SyntaxFactory.ParseTypeName(type),
+                        SyntaxFactory.Identifier(TypeHelper.EscapeIdentifier(ctch.getParameter().getNameAsString()))
+                    ),
+                    filter: null,
+                    block: catchBlockSyntax
+                )
+            );
+        }
+        finally
+        {
+            context.PopVariableScope();
+        }
     }
 }

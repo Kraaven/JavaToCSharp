@@ -189,6 +189,6 @@ public class Guarded {
 
         var parsed = Convert(java);
         Assert.Contains("is string s", parsed);
-        Assert.Contains("s.Length > 0", parsed);
+        Assert.Contains("s.Length() > 0", parsed);
     }
 }

@@ -22,12 +22,17 @@ public class ForStatementVisitor : StatementVisitor<ForStmt>
             {
                 if (init is VariableDeclarationExpr varExpr)
                 {
-                    var type = TypeHelper.ConvertType(varExpr.getCommonType());
+                    var type = TypeHelper.ConvertType(context, varExpr.getCommonType());
 
                     var variableDeclarators = varExpr.getVariables()?.ToList<VariableDeclarator>() ?? [];
                     var vars = variableDeclarators
                                .Select(i => SyntaxFactory.VariableDeclarator(i.toString()))
                                .ToArray();
+
+                    foreach (var declarator in variableDeclarators)
+                    {
+                        context.DeclareVariable(declarator.getNameAsString(), declarator.getType().toString());
+                    }
 
                     varSyntax = SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName(type), SyntaxFactory.SeparatedList(vars, Enumerable.Repeat(SyntaxFactory.Token(SyntaxKind.CommaToken), vars.Length - 1)));
                 }
@@ -55,17 +60,27 @@ public class ForStatementVisitor : StatementVisitor<ForStmt>
         }
 
         var body = forStmt.getBody();
-        var bodySyntax = VisitStatement(context, body);
 
-        if (bodySyntax is null)
+        context.PushVariableScope();
+
+        try
         {
-            return null;
-        }
+            var bodySyntax = VisitStatement(context, body);
 
-        return SyntaxFactory.ForStatement(bodySyntax)
-            .WithDeclaration(varSyntax)
-            .AddInitializers(initSyntaxes.ToArray())
-            .WithCondition(conditionSyntax)
-            .AddIncrementors(incrementSyntaxes.ToArray());
+            if (bodySyntax is null)
+            {
+                return null;
+            }
+
+            return SyntaxFactory.ForStatement(bodySyntax)
+                .WithDeclaration(varSyntax)
+                .AddInitializers(initSyntaxes.ToArray())
+                .WithCondition(conditionSyntax)
+                .AddIncrementors(incrementSyntaxes.ToArray());
+        }
+        finally
+        {
+            context.PopVariableScope();
+        }
     }
 }

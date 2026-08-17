@@ -45,6 +45,8 @@ public class FieldDeclarationVisitor : BodyDeclarationVisitor<FieldDeclaration>
                 }
             }
 
+            context.DeclareVariable(name, item.getType().toString());
+
             var initExpr = item.getInitializer().FromOptional<Expression>();
 
             if (initExpr is not null)
@@ -61,7 +63,7 @@ public class FieldDeclarationVisitor : BodyDeclarationVisitor<FieldDeclaration>
                 variables.Add(SyntaxFactory.VariableDeclarator(name));
         }
 
-        var typeSyntax = TypeHelper.ConvertTypeSyntax(commonType, arrayRank ?? 0);
+        var typeSyntax = TypeHelper.ConvertTypeSyntax(context, commonType, arrayRank ?? 0);
 
         var fieldSyntax = SyntaxFactory.FieldDeclaration(
             SyntaxFactory.VariableDeclaration(
@@ -82,6 +84,19 @@ public class FieldDeclarationVisitor : BodyDeclarationVisitor<FieldDeclaration>
             fieldSyntax = fieldSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword));
         if (mods.Contains(Modifier.Keyword.VOLATILE))
             fieldSyntax = fieldSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.VolatileKeyword));
+
+        // Java's package-private default on a nested class field means it is
+        // accessible from the enclosing class. In C# a modifier-less field on a
+        // public nested class is private, so promote it.
+        if (context.RootTypeName is not null
+            && context.LastTypeName is not null
+            && context.RootTypeName != context.LastTypeName
+            && !mods.Contains(Modifier.Keyword.PUBLIC)
+            && !mods.Contains(Modifier.Keyword.PROTECTED)
+            && !mods.Contains(Modifier.Keyword.PRIVATE))
+        {
+            fieldSyntax = fieldSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword));
+        }
 
         return fieldSyntax;
     }

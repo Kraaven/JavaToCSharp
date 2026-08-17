@@ -86,6 +86,12 @@ public class ConversionContext(
     public bool PreserveJavaMethodNames => Options.PreserveJavaMethodNames || IsConvertingRecord || IsConvertingEnum;
 
     /// <summary>
+    /// C# namespaces collected while resolving member access through the mapping set.
+    /// Merged into the output usings, sorted alphabetically and deduplicated.
+    /// </summary>
+    public ISet<string> MappingUsings { get; } = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
     /// Maps record component names to private backing field names (e.g. name → name_attribute).
     /// </summary>
     public IDictionary<string, string> RecordComponentBackingFields { get; } =
@@ -97,4 +103,52 @@ public class ConversionContext(
     /// </summary>
     public IDictionary<string, string> EnumConstantsBySimpleName { get; } =
         new Dictionary<string, string>(StringComparer.Ordinal);
+
+    private readonly List<Dictionary<string, string>> _variableScopes = [];
+
+    /// <summary>
+    /// Enters a new lexical scope for variable-type tracking. Call <see cref="PopVariableScope"/>
+    /// when the scope ends so shadowed names are restored.
+    /// </summary>
+    public void PushVariableScope() =>
+        _variableScopes.Add(new Dictionary<string, string>(StringComparer.Ordinal));
+
+    public void PopVariableScope()
+    {
+        if (_variableScopes.Count > 0)
+        {
+            _variableScopes.RemoveAt(_variableScopes.Count - 1);
+        }
+    }
+
+    /// <summary>
+    /// Records the declared Java type of a variable in the current scope. The stored value is the
+    /// raw declared type string (e.g. <c>Map&lt;String, Item&gt;</c> or <c>BufferedReader</c>).
+    /// </summary>
+    public void DeclareVariable(string name, string javaType)
+    {
+        if (_variableScopes.Count == 0)
+        {
+            PushVariableScope();
+        }
+
+        _variableScopes[^1][name] = javaType;
+    }
+
+    /// <summary>
+    /// Looks up the declared Java type of a variable, innermost scope first.
+    /// </summary>
+    public bool TryGetVariableType(string name, out string javaType)
+    {
+        for (int i = _variableScopes.Count - 1; i >= 0; i--)
+        {
+            if (_variableScopes[i].TryGetValue(name, out javaType!))
+            {
+                return true;
+            }
+        }
+
+        javaType = "";
+        return false;
+    }
 }

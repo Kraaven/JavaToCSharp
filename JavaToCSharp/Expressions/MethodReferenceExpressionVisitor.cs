@@ -17,10 +17,13 @@ public class MethodReferenceExpressionVisitor : ExpressionVisitor<MethodReferenc
             scopeSyntax = VisitExpression(context, scope);
         }
 
-        var methodName = context.PreserveJavaMethodNames
+        var methodName = context.Options.PreserveJavaMethodNames
             ? expr.getIdentifier()
             : TypeHelper.Capitalize(expr.getIdentifier());
-        methodName = TypeHelper.ReplaceCommonMethodNames(methodName);
+        if (!context.Options.PreserveJavaMethodNames)
+        {
+            methodName = TypeHelper.ReplaceCommonMethodNames(methodName);
+        }
 
         ExpressionSyntax methodExpression;
 

@@ -10,55 +10,69 @@ public class LambdaExpressionVisitor : ExpressionVisitor<LambdaExpr>
 {
     protected override ExpressionSyntax? Visit(ConversionContext context, LambdaExpr expr)
     {
-        var bodyStatement = expr.getBody();
-        var bodyStatementSyntax = StatementVisitor.VisitStatement(context, bodyStatement);
+        var parameters = expr.getParameters().ToList<Parameter>() ?? [];
 
-        ParenthesizedLambdaExpressionSyntax? lambdaExpressionSyntax = null;
+        context.PushVariableScope();
 
-        if (bodyStatementSyntax is ExpressionStatementSyntax ess)
+        try
         {
-            lambdaExpressionSyntax = SyntaxFactory.ParenthesizedLambdaExpression(ess.Expression);
-        }
-        else if(bodyStatementSyntax is not null)
-        {
-            lambdaExpressionSyntax = SyntaxFactory.ParenthesizedLambdaExpression(bodyStatementSyntax);
-        }
-
-        var parameters = expr.getParameters().ToList<Parameter>();
-
-        if (parameters is not { Count: > 0 })
-            return lambdaExpressionSyntax;
-
-        var paramSyntaxes = new List<ParameterSyntax>();
-
-        foreach (var param in parameters)
-        {
-            var type = param.getType();
-            int arrayLevel = type.getArrayLevel();
-            string identifier = TypeHelper.EscapeIdentifier(param.getNameAsString());
-
-            if (param.isVarArgs() && arrayLevel == 0)
+            foreach (var param in parameters)
             {
-                arrayLevel = 1;
+                context.DeclareVariable(param.getNameAsString(), param.getType().toString());
             }
 
-            var modifiers = SyntaxFactory.TokenList();
+            var bodyStatement = expr.getBody();
+            var bodyStatementSyntax = StatementVisitor.VisitStatement(context, bodyStatement);
 
-            if (param.isVarArgs())
-                modifiers = SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.ParamsKeyword));
+            ParenthesizedLambdaExpressionSyntax? lambdaExpressionSyntax = null;
 
-            var paramSyntax = SyntaxFactory.Parameter(
-                attributeLists: [],
-                modifiers: modifiers,
-                type: TypeHelper.ConvertTypeSyntax(type, arrayLevel),
-                identifier: SyntaxFactory.Identifier(identifier),
-                @default: null);
+            if (bodyStatementSyntax is ExpressionStatementSyntax ess)
+            {
+                lambdaExpressionSyntax = SyntaxFactory.ParenthesizedLambdaExpression(ess.Expression);
+            }
+            else if(bodyStatementSyntax is not null)
+            {
+                lambdaExpressionSyntax = SyntaxFactory.ParenthesizedLambdaExpression(bodyStatementSyntax);
+            }
 
-            paramSyntaxes.Add(paramSyntax);
+            if (parameters is not { Count: > 0 })
+                return lambdaExpressionSyntax;
+
+            var paramSyntaxes = new List<ParameterSyntax>();
+
+            foreach (var param in parameters)
+            {
+                var type = param.getType();
+                int arrayLevel = type.getArrayLevel();
+                string identifier = TypeHelper.EscapeIdentifier(param.getNameAsString());
+
+                if (param.isVarArgs() && arrayLevel == 0)
+                {
+                    arrayLevel = 1;
+                }
+
+                var modifiers = SyntaxFactory.TokenList();
+
+                if (param.isVarArgs())
+                    modifiers = SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.ParamsKeyword));
+
+                var paramSyntax = SyntaxFactory.Parameter(
+                    attributeLists: [],
+                    modifiers: modifiers,
+                    type: TypeHelper.ConvertTypeSyntax(context, type, arrayLevel),
+                    identifier: SyntaxFactory.Identifier(identifier),
+                    @default: null);
+
+                paramSyntaxes.Add(paramSyntax);
+            }
+
+            lambdaExpressionSyntax = lambdaExpressionSyntax?.AddParameterListParameters(paramSyntaxes.ToArray());
+
+            return lambdaExpressionSyntax;
         }
-
-        lambdaExpressionSyntax = lambdaExpressionSyntax?.AddParameterListParameters(paramSyntaxes.ToArray());
-
-        return lambdaExpressionSyntax;
+        finally
+        {
+            context.PopVariableScope();
+        }
     }
 }

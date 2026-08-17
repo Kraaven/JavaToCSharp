@@ -1,0 +1,100 @@
+# Built-in mapping spec: java.lang.System (console I/O) -> System.Console
+#
+# The nested routing nodes for System.out/System.err are registered as
+# java.lang.System.Out / java.lang.System.Err (instead of java.io.PrintStream)
+# so this spec only needs the java.lang -> System namespace row and therefore
+# composes cleanly with the System.IO built-in spec.
+namespaces:
+  - java_packages: [java.lang]
+    csharp_packages: [System]
+
+class_map:
+  - java_class: java.lang.System
+    csharp_class: Console
+    entries:
+      - java_member: out
+        member_type: field
+        kind: rename
+        class_map:
+          - java_class: java.lang.System.Out
+            csharp_class: Console
+            entries:
+              - java_member: println
+                arg_count: variadic
+                kind: rename
+                csharp_member: WriteLine
+              - java_member: print
+                arg_count: variadic
+                kind: rename
+                csharp_member: Write
+              - java_member: printf
+                arg_count: variadic
+                kind: template
+                expression: "$0.Write($1, $rest)"
+                confidence: medium
+                notes: "Java's printf format specifiers (%d, %s) differ from C#'s ({0}); review the format string."
+      - java_member: err
+        member_type: field
+        kind: rename
+        class_map:
+          - java_class: java.lang.System.Err
+            csharp_class: Console
+            entries:
+              - java_member: println
+                arg_count: variadic
+                kind: template
+                expression: "$0.Error.WriteLine($rest)"
+              - java_member: print
+                arg_count: variadic
+                kind: template
+                expression: "$0.Error.Write($rest)"
+              - java_member: printf
+                arg_count: variadic
+                kind: template
+                expression: "$0.Error.Write($1, $rest)"
+                confidence: medium
+                notes: "Java's printf format specifiers (%d, %s) differ from C#'s ({0}); review the format string."
+      - java_member: in
+        member_type: field
+        kind: rename
+        csharp_member: In
+      - java_member: currentTimeMillis
+        arg_count: 0
+        kind: template
+        expression: "DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()"
+      - java_member: nanoTime
+        arg_count: 0
+        kind: unsupported
+        notes: "Use System.Diagnostics.Stopwatch.GetTimestamp() (add using System.Diagnostics). Timestamps are not directly comparable to DateTime."
+      - java_member: gc
+        arg_count: 0
+        kind: template
+        expression: "GC.Collect()"
+      - java_member: exit
+        arg_count: 1
+        kind: template
+        expression: "Environment.Exit($1)"
+      - java_member: arraycopy
+        arg_count: 5
+        kind: template
+        expression: "Array.Copy($1, $2, $3, $4, $5)"
+      - java_member: getenv
+        arg_count: 1
+        kind: template
+        expression: "Environment.GetEnvironmentVariable($1)"
+      - java_member: lineSeparator
+        arg_count: 0
+        kind: template
+        expression: "Environment.NewLine"
+      - java_member: getProperty
+        arg_count: 1
+        kind: unsupported
+        notes: "Java system properties have no direct C# equivalent. Use Environment.GetEnvironmentVariable for OS environment variables."
+      - java_member: setProperty
+        arg_count: 2
+        kind: unsupported
+        notes: "Java system properties have no direct C# equivalent. Use Environment.SetEnvironmentVariable for OS environment variables."
+      - java_member: identityHashCode
+        arg_count: 1
+        kind: template
+        expression: "System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode($1)"

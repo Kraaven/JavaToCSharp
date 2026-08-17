@@ -106,7 +106,7 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
 
                 var constraint = SyntaxFactory.TypeParameterConstraintClause(typeParam.getNameAsString())
                     .AddConstraints(bounds
-                        .Select(bound => SyntaxFactory.TypeConstraint(TypeHelper.GetSyntaxFromType(bound)))
+                        .Select(bound => SyntaxFactory.TypeConstraint(TypeHelper.GetSyntaxFromType(context, bound)))
                         .ToArray<TypeParameterConstraintSyntax>());
 
                 classSyntax = classSyntax.AddConstraintClauses(constraint);
@@ -130,7 +130,7 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
         foreach (var implement in implements)
         {
             classSyntax = classSyntax.AddBaseListTypes(
-                SyntaxFactory.SimpleBaseType(TypeHelper.GetSyntaxFromType(implement)));
+                SyntaxFactory.SimpleBaseType(TypeHelper.GetSyntaxFromType(context, implement)));
         }
 
         var components = recordDecl.getParameters().ToList<Parameter>() ?? [];
@@ -295,7 +295,7 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
 
         foreach (var component in components)
         {
-            classSyntax = classSyntax.AddMembers(CreateComponentField(component));
+            classSyntax = classSyntax.AddMembers(CreateComponentField(context, component));
         }
 
         string genericTypeName = BuildGenericTypeName(name, context.TypeParameterNames);
@@ -326,13 +326,13 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
             string componentName = component.getNameAsString();
             if (!overriddenAccessors.Contains(componentName))
             {
-                classSyntax = classSyntax.AddMembers(CreateDefaultAccessor(component));
+                classSyntax = classSyntax.AddMembers(CreateDefaultAccessor(context, component));
             }
         }
 
         if (components.Count > 0)
         {
-            classSyntax = classSyntax.AddMembers(CreateDeconstructMethod(components));
+            classSyntax = classSyntax.AddMembers(CreateDeconstructMethod(context, components));
         }
 
         if (!hasEquals)
@@ -387,9 +387,9 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
 
     private static string GetStorageName(string componentName) => componentName + "_attribute";
 
-    private static FieldDeclarationSyntax CreateComponentField(Parameter component)
+    private static FieldDeclarationSyntax CreateComponentField(ConversionContext context, Parameter component)
     {
-        string typeName = TypeHelper.ConvertTypeOf(component);
+        string typeName = TypeHelper.ConvertTypeOf(context, component);
         string identifier = TypeHelper.EscapeIdentifier(GetStorageName(component.getNameAsString()));
 
         return SyntaxFactory.FieldDeclaration(
@@ -402,9 +402,9 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
                 SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword));
     }
 
-    private static MethodDeclarationSyntax CreateDefaultAccessor(Parameter component)
+    private static MethodDeclarationSyntax CreateDefaultAccessor(ConversionContext context, Parameter component)
     {
-        string typeName = TypeHelper.ConvertTypeOf(component);
+        string typeName = TypeHelper.ConvertTypeOf(context, component);
         string componentName = component.getNameAsString();
         string storageName = TypeHelper.EscapeIdentifier(GetStorageName(componentName));
         string methodName = TypeHelper.EscapeIdentifier(componentName);
@@ -422,7 +422,7 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
             .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
     }
 
-    private static MethodDeclarationSyntax CreateDeconstructMethod(IReadOnlyList<Parameter> components)
+    private static MethodDeclarationSyntax CreateDeconstructMethod(ConversionContext context, IReadOnlyList<Parameter> components)
     {
         var parameters = new List<ParameterSyntax>();
         var body = new List<StatementSyntax>();
@@ -432,7 +432,7 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
             string componentName = component.getNameAsString();
             string paramName = TypeHelper.EscapeIdentifier(componentName);
             string storageName = TypeHelper.EscapeIdentifier(GetStorageName(componentName));
-            string typeName = TypeHelper.ConvertTypeOf(component);
+            string typeName = TypeHelper.ConvertTypeOf(context, component);
 
             parameters.Add(
                 SyntaxFactory.Parameter(SyntaxFactory.Identifier(paramName))
@@ -473,7 +473,7 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
             string paramName = TypeHelper.EscapeIdentifier(component.getNameAsString());
             paramSyntaxes.Add(
                 SyntaxFactory.Parameter(SyntaxFactory.Identifier(paramName))
-                    .WithType(SyntaxFactory.ParseTypeName(TypeHelper.ConvertTypeOf(component))));
+                    .WithType(SyntaxFactory.ParseTypeName(TypeHelper.ConvertTypeOf(context, component))));
         }
 
         if (paramSyntaxes.Count > 0)

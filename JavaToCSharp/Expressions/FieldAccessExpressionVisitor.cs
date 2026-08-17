@@ -1,4 +1,5 @@
 ﻿using com.github.javaparser.ast.expr;
+using JavaToCSharp.TypeMapping;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -8,6 +9,15 @@ public class FieldAccessExpressionVisitor : ExpressionVisitor<FieldAccessExpr>
 {
     protected override ExpressionSyntax? Visit(ConversionContext context, FieldAccessExpr fieldAccessExpr)
     {
+        if (context.Options.MappingIndex is not null)
+        {
+            var status = TypeMappingResolver.TryResolveFieldAccess(context, fieldAccessExpr, out var mappedSyntax);
+            if (status != MappingResolutionStatus.Unresolved)
+            {
+                return mappedSyntax;
+            }
+        }
+
         var scope = fieldAccessExpr.getScope();
         ExpressionSyntax? scopeSyntax = null;
 
@@ -38,12 +48,10 @@ public class FieldAccessExpressionVisitor : ExpressionVisitor<FieldAccessExpr>
             field = backingField;
         }
 
+        field = context.Options.PreserveJavaMethodNames
+            ? field
+            : TypeHelper.ReplaceCommonFieldNames(field);
         field = TypeHelper.EscapeIdentifier(field);
-        if (!context.PreserveJavaMethodNames)
-        {
-            // array length accessor should be capitalized
-            field = field == "length" ? "Length" : field;
-        }
 
         return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, scopeSyntax, SyntaxFactory.IdentifierName(field));
     }
