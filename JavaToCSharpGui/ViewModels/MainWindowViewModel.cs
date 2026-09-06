@@ -485,12 +485,12 @@ public partial class MainWindowViewModel : ViewModelBase
     });
 
     [RelayCommand]
-    private static void OpenSettings()
+    private void OpenSettings()
     {
         var parent = Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
             ? desktop.MainWindow
             : null;
-        var settings = new SettingsWindow();
+        var settings = new SettingsWindow(_storageProvider);
 
         if (parent is not null)
         {

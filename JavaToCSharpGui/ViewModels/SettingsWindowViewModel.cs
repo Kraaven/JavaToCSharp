@@ -1,12 +1,16 @@
 using Avalonia.Collections;
+using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JavaToCSharp.TypeMapping;
+using JavaToCSharpGui.Infrastructure;
 
 namespace JavaToCSharpGui.ViewModels;
 
 public partial class SettingsWindowViewModel : ViewModelBase
 {
+    private readonly IHostStorageProvider? _storageProvider;
+
     [ObservableProperty] private string _addUsingInput = "";
 
     [ObservableProperty] private string _addMappingFileInput = "";
@@ -26,6 +30,12 @@ public partial class SettingsWindowViewModel : ViewModelBase
     [ObservableProperty] private bool _threadingMapping = CurrentOptions.MappingSpecs.Contains(BuiltInMappingSpec.SystemThreading);
 
     [ObservableProperty] private bool _textMapping = CurrentOptions.MappingSpecs.Contains(BuiltInMappingSpec.SystemText);
+
+    [ObservableProperty] private bool _timeMapping = CurrentOptions.MappingSpecs.Contains(BuiltInMappingSpec.SystemTime);
+
+    [ObservableProperty] private bool _regexMapping = CurrentOptions.MappingSpecs.Contains(BuiltInMappingSpec.SystemTextRegularExpressions);
+
+    [ObservableProperty] private bool _numericsMapping = CurrentOptions.MappingSpecs.Contains(BuiltInMappingSpec.SystemNumerics);
 
     [ObservableProperty] private string? _selectedUsing;
 
@@ -54,6 +64,11 @@ public partial class SettingsWindowViewModel : ViewModelBase
     [ObservableProperty] private bool _logToFile = CurrentOptions.Options.LogToFile;
 
     [ObservableProperty] private string _logFilePath = CurrentOptions.Options.LogFilePath;
+
+    public SettingsWindowViewModel(IHostStorageProvider? storageProvider = null)
+    {
+        _storageProvider = storageProvider;
+    }
 
     public event EventHandler? CloseRequested;
 
@@ -93,6 +108,44 @@ public partial class SettingsWindowViewModel : ViewModelBase
 
         AddMappingFileInput = string.Empty;
     }
+
+    [RelayCommand(CanExecute = nameof(CanBrowseFolder))]
+    private async Task BrowseMappingFolder()
+    {
+        if (_storageProvider is null || !_storageProvider.CanPickFolder)
+        {
+            return;
+        }
+
+        var folders = await _storageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "Select folder containing YAML mapping files",
+            AllowMultiple = false,
+        });
+
+        if (folders.Count == 0)
+        {
+            return;
+        }
+
+        var folder = folders[0];
+        var folderPath = folder.Path.LocalPath;
+        if (string.IsNullOrEmpty(folderPath))
+        {
+            return;
+        }
+
+        var yamlFiles = Directory.GetFiles(folderPath, "*.yaml", SearchOption.AllDirectories);
+        foreach (var yamlFile in yamlFiles)
+        {
+            if (!MappingFiles.Contains(yamlFile))
+            {
+                MappingFiles.Add(yamlFile);
+            }
+        }
+    }
+
+    private bool CanBrowseFolder() => _storageProvider?.CanPickFolder == true;
 
     [RelayCommand]
     private void Save()
@@ -145,6 +198,21 @@ public partial class SettingsWindowViewModel : ViewModelBase
         if (TextMapping)
         {
             CurrentOptions.MappingSpecs.Add(BuiltInMappingSpec.SystemText);
+        }
+
+        if (TimeMapping)
+        {
+            CurrentOptions.MappingSpecs.Add(BuiltInMappingSpec.SystemTime);
+        }
+
+        if (RegexMapping)
+        {
+            CurrentOptions.MappingSpecs.Add(BuiltInMappingSpec.SystemTextRegularExpressions);
+        }
+
+        if (NumericsMapping)
+        {
+            CurrentOptions.MappingSpecs.Add(BuiltInMappingSpec.SystemNumerics);
         }
 
         CurrentOptions.ReloadMappingIndex();

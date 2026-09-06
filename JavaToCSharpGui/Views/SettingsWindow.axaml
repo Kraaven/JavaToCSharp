@@ -58,17 +58,33 @@
                               IsChecked="{CompiledBinding TextMapping}">
                         System.Text (StringBuilder, MessageFormat)
                     </CheckBox>
+                    <CheckBox Margin="5" Name="TimeMapping"
+                              IsChecked="{CompiledBinding TimeMapping}">
+                        System.Time (LocalDate/LocalDateTime → DateTime, Duration → TimeSpan, ZoneId → TimeZoneInfo)
+                    </CheckBox>
+                    <CheckBox Margin="5" Name="RegexMapping"
+                              IsChecked="{CompiledBinding RegexMapping}">
+                        System.Text.RegularExpressions (Pattern → Regex, Matcher → Match)
+                    </CheckBox>
+                    <CheckBox Margin="5" Name="NumericsMapping"
+                              IsChecked="{CompiledBinding NumericsMapping}">
+                        System.Numerics (BigInteger, BigDecimal → decimal)
+                    </CheckBox>
                     <TextBlock Margin="5" TextWrapping="Wrap">
                         Mapping files (yaml with namespaces/class_map) applied to every conversion.
                         Multiple files are merged; later files win on conflicts.
                     </TextBlock>
-                    <Grid ColumnDefinitions="*,Auto">
+                    <Grid ColumnDefinitions="*,Auto,Auto">
                         <TextBox Name="AddMappingFileInput" Margin="5,2,5,2"
                                  Text="{CompiledBinding AddMappingFileInput}"
                                  Watermark="path to a mapping file" />
                         <Button Name="AddMappingFile" Grid.Column="1" Margin="5,2,5,2"
                                 Command="{CompiledBinding AddMappingFileCommand}">
                             Add
+                        </Button>
+                        <Button Name="BrowseMappingFolder" Grid.Column="2" Margin="5,2,5,2"
+                                Command="{CompiledBinding BrowseMappingFolderCommand}">
+                            Browse Folder
                         </Button>
                     </Grid>
                     <Grid ColumnDefinitions="*,Auto">

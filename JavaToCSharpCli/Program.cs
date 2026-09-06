@@ -122,6 +122,30 @@ public class Program
         DefaultValueFactory = _ => false,
     };
 
+    private static readonly Option<bool> _timeMappingOption = new("--time-mapping")
+    {
+        Description = "Include the built-in System.Time mapping spec (java.time types -> DateTime, TimeSpan, TimeZoneInfo)",
+        DefaultValueFactory = _ => false,
+    };
+
+    private static readonly Option<bool> _regexMappingOption = new("--regex-mapping")
+    {
+        Description = "Include the built-in System.Text.RegularExpressions mapping spec (Pattern -> Regex, Matcher -> Match)",
+        DefaultValueFactory = _ => false,
+    };
+
+    private static readonly Option<bool> _numericsMappingOption = new("--numerics-mapping")
+    {
+        Description = "Include the built-in System.Numerics mapping spec (BigInteger, BigDecimal -> decimal)",
+        DefaultValueFactory = _ => false,
+    };
+
+    private static readonly Option<bool> _allMappingOption = new("--all-mapping")
+    {
+        Description = "Enable all built-in mapping specs at once",
+        DefaultValueFactory = _ => false,
+    };
+
     private static readonly Option<int> _maxParallelismOption = new("--max-parallelism")
     {
         Description = "Maximum degree of parallelism for directory conversion (default: number of CPU cores)",
@@ -201,6 +225,10 @@ public class Program
         rootCommand.Options.Add(_ioMappingOption);
         rootCommand.Options.Add(_threadingMappingOption);
         rootCommand.Options.Add(_textMappingOption);
+        rootCommand.Options.Add(_timeMappingOption);
+        rootCommand.Options.Add(_regexMappingOption);
+        rootCommand.Options.Add(_numericsMappingOption);
+        rootCommand.Options.Add(_allMappingOption);
         rootCommand.Options.Add(_enableLoggingOption);
         rootCommand.Options.Add(_logFileOption);
 
@@ -282,34 +310,56 @@ public class Program
         var mappingFiles = context.GetValue(_mappingFileOption);
 
         var selectedSpecs = new List<BuiltInMappingSpec>();
-        if (context.GetValue(_consoleMappingOption))
+        if (context.GetValue(_allMappingOption))
         {
-            selectedSpecs.Add(BuiltInMappingSpec.Console);
+            selectedSpecs.AddRange(Enum.GetValues<BuiltInMappingSpec>());
         }
-
-        if (context.GetValue(_systemMappingOption))
+        else
         {
-            selectedSpecs.Add(BuiltInMappingSpec.System);
-        }
+            if (context.GetValue(_consoleMappingOption))
+            {
+                selectedSpecs.Add(BuiltInMappingSpec.Console);
+            }
 
-        if (context.GetValue(_collectionsMappingOption))
-        {
-            selectedSpecs.Add(BuiltInMappingSpec.SystemCollections);
-        }
+            if (context.GetValue(_systemMappingOption))
+            {
+                selectedSpecs.Add(BuiltInMappingSpec.System);
+            }
 
-        if (context.GetValue(_ioMappingOption))
-        {
-            selectedSpecs.Add(BuiltInMappingSpec.SystemIO);
-        }
+            if (context.GetValue(_collectionsMappingOption))
+            {
+                selectedSpecs.Add(BuiltInMappingSpec.SystemCollections);
+            }
 
-        if (context.GetValue(_threadingMappingOption))
-        {
-            selectedSpecs.Add(BuiltInMappingSpec.SystemThreading);
-        }
+            if (context.GetValue(_ioMappingOption))
+            {
+                selectedSpecs.Add(BuiltInMappingSpec.SystemIO);
+            }
 
-        if (context.GetValue(_textMappingOption))
-        {
-            selectedSpecs.Add(BuiltInMappingSpec.SystemText);
+            if (context.GetValue(_threadingMappingOption))
+            {
+                selectedSpecs.Add(BuiltInMappingSpec.SystemThreading);
+            }
+
+            if (context.GetValue(_textMappingOption))
+            {
+                selectedSpecs.Add(BuiltInMappingSpec.SystemText);
+            }
+
+            if (context.GetValue(_timeMappingOption))
+            {
+                selectedSpecs.Add(BuiltInMappingSpec.SystemTime);
+            }
+
+            if (context.GetValue(_regexMappingOption))
+            {
+                selectedSpecs.Add(BuiltInMappingSpec.SystemTextRegularExpressions);
+            }
+
+            if (context.GetValue(_numericsMappingOption))
+            {
+                selectedSpecs.Add(BuiltInMappingSpec.SystemNumerics);
+            }
         }
 
         if (selectedSpecs.Count > 0 || mappingFiles is { Count: > 0 })

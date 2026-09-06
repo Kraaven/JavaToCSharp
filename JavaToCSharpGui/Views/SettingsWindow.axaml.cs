@@ -1,13 +1,21 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using JavaToCSharpGui.Infrastructure;
 using JavaToCSharpGui.ViewModels;
 
 namespace JavaToCSharpGui.Views;
 
 public partial class SettingsWindow : Window
 {
-    public SettingsWindow()
+    private readonly IHostStorageProvider? _storageProvider;
+
+    public SettingsWindow() : this(null)
     {
+    }
+
+    public SettingsWindow(IHostStorageProvider? storageProvider)
+    {
+        _storageProvider = storageProvider;
         InitializeComponent();
     }
 
@@ -15,7 +23,7 @@ public partial class SettingsWindow : Window
     {
         base.OnOpened(e);
 
-        var vm = new SettingsWindowViewModel();
+        var vm = new SettingsWindowViewModel(_storageProvider);
         DataContext = vm;
 
         vm.CloseRequested += OnCloseRequested;

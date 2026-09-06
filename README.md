@@ -12,7 +12,7 @@ Pull requests and issue submission welcome.
 
 ## Getting Started
 
-Clone the repo, build, and launch the Gui WPF app. Click the "..." button on
+Clone the repo, build, and launch the Gui Avalonia app. Click the "..." button on
 the left side to load a Java file, and then click Convert to convert to
 C# on the right side. Please note that conversion may take up to a few
 minutes on large files.
@@ -82,62 +82,124 @@ var options = new JavaConversionOptions
 };
 ```
 
-## Syntax Mappings
+### Preserving Java member names (cross-file conversions)
 
-By default, JavaToCSharp translates some usual Java classes and methods into their C# counterparts 
-(e.g. Java maps are converted into dictionaries).
-You can specify additional mappings to fine tune the translation of the syntactic elements.
+By default (`JavaConversionOptions.PreserveJavaMethodNames = true`), method, field and member names keep
+their original Java casing and common Java calls such as `size()`, `get(i)`, `set(i, v)`, `length()` and
+`compare` are **not** rewritten to C# properties/indexers. This keeps individually converted files
+call-compatible with each other (e.g. a converted `Vec3i` still exposes `getX()`/`offset()`, so a converted
+`BlockPos` that calls them still links). Only `equals`/`hashCode`/`toString`/`getClass` are mapped to the
+C# `Equals`/`GetHashCode`/`ToString`/`GetType` equivalents, since C# requires them.
 
-The mappings are specified in a yaml file with root keys that represent the kind of mapping,
-each having a set of key-value pairs that specify the java to C# mappings:
+Set `PreserveJavaMethodNames = false` to get C#-style PascalCase method names (`size()` -> `Size()`,
+`get(i)` -> `Get(i)`, `length()` -> `Length()`). Member accesses are never rewritten to C# properties
+or indexers by default; property/indexer rewrites are only applied explicitly via a member mapping set
+(see below). The CLI flag is `--preserve-java-method-names` (default `true`) and the GUI exposes the same
+toggle in Settings.
 
-- `ImportMappings`: Mappings from Java package names to the C# namespaces.
-  If a key-value pair has an empty value, the package will be removed from the resulting C#.
-- `VoidMethodMappings`: Mappings from unqualified Java void methods to C#. 
-- `NonVoidMethodMappings`: Same as before, but for non-void java methods.
-- `AnnotationMappings`: Mappings from Java method annotations to C#.
+## Member Mapping Sets (member-level rewrites)
 
-For example, to convert *JUnit* tests into *xUnit* you can create this mapping file:
+By default, JavaToCSharp translates some usual Java classes and methods into their C# counterparts
+(e.g. Java maps are converted into dictionaries). For finer control — renaming a static call
+(`Math.abs(x)` -> `Math.Abs(x)`), turning a call into a C# property (`String.length()` -> `str.Length`),
+rewriting whole chains (`System.out.println(x)` -> `Console.WriteLine(x)`), or flagging code with no safe
+equivalent — the converter accepts YAML **mapping sets** with a `namespaces` and a `class_map` section:
+
 ```yaml
-ImportMappings:
-  org.junit.Test : Xunit
-  org.junit.Assert.assertEquals : ""
-  org.junit.Assert.assertTrue : ""
-VoidMethodMappings:
-  assertEquals : Assert.Equal
-  assertTrue : Assert.True
-AnnotationMappings:
-  Test : Fact
+namespaces:
+  - java_packages: [java.lang]
+    csharp_packages: [System]
+  - java_packages: [java.io]
+    csharp_packages: [System]
+
+class_map:
+  - java_class: java.lang.Math
+    csharp_class: Math
+    kind: class
+    entries:
+      - java_member: abs
+        arg_count: 1
+        kind: rename
+        csharp_member: Abs
+      - java_member: random
+        arg_count: 0
+        kind: template
+        expression: "new Random().NextDouble()"
+        confidence: medium
+        notes: "No direct static C# equivalent; flag for review."
+      - java_member: PI
+        member_type: field
+        kind: rename
+        csharp_member: PI
+  - java_class: java.lang.System
+    csharp_class: System
+    entries:
+      - java_member: out
+        member_type: field
+        kind: property
+        csharp_member: Out
+        class_map:
+          - java_class: java.io.PrintStream
+            csharp_class: Console
+            entries:
+              - java_member: println
+                arg_count: 1
+                kind: rename
+                csharp_member: WriteLine
 ```
 
-If you specify this file in the `--mappings-file` CLI argument, the conversion of this JUnit test:
-```Java
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import org.junit.Test;
-public class MappingsTest {
-  @Test
-  public void testAsserts() {
-    assertEquals("a", "a");
-    assertTrue(true);
-  }
-}
+- `namespaces` maps Java packages to the C# namespaces the converter adds as `using` directives
+  (longest prefix wins).
+- `class_map` entries declare `java_class`/`csharp_class` and their `entries` (methods/fields).
+  Entries support `rename` (method stays a call), `property` (call becomes a property access, parens
+  dropped), `template` (free-form `expression` with `$0` = receiver and `$1..$n`/`$rest` = arguments),
+  and `unsupported` (emits a `/* TODO(java-to-csharp): ... */` block marker). `arg_count` may be an
+  integer or `variadic`; `type_hint` disambiguates overloads. `confidence: medium|low` emits a
+  `/* REVIEW(java-to-csharp): ... */` block marker.
+- Nested `class_map` under an entry routes chains: `System.out.println(x)` above becomes
+  `Console.WriteLine(x)`, eliding the `out` routing node.
+
+Given the mapping file above, `double d = Math.abs(-1.0);` converts to `double d = Math.Abs(-1.0);`.
+
+CLI: pass `--mapping-file <path>` (repeatable; multiple files are merged, later files win on conflicts):
+
+```
+JavaToCSharpCli --mapping-file java-mappings.yaml file Foo.java
 ```
 
-will produce this xUnit test:
-```csharp
-using Xunit;
+GUI: add mapping files under the **Mappings** tab in Settings; they apply to every conversion and are
+persisted. Library users set `options.MappingIndex = TypeMappingIndex.LoadFromFiles([...])` or build
+the index in C# with `new TypeMappingBuilder()...Build()`.
 
-public class MappingsTest
-{
-  [Fact]
-  public virtual void TestAsserts()
-  {
-    Assert.Equal("a", "a");
-    Assert.True(true);
-  }
-}
+### Built-in mapping specs
+
+For common Java API families, the converter bundles nine curated mapping specs that work exactly like
+YAML mapping files but are built in — no file to find or author. They are strictly opt-in:
+
+| CLI flag | spec |
+|---|---|
+| `--console-mapping` | Console: `System.out.println(x)` → `Console.WriteLine(x)`, `System.exit`, `currentTimeMillis` |
+| `--system-mapping` | System: `Math`, `Integer`/`Long`/… boxing types, `String`, `Object` |
+| `--collections-mapping` | System.Collections: `java.util` `List`/`Map`/`Set`, `Collections`, `Arrays`, `Objects` |
+| `--io-mapping` | System.IO: `java.io` / `java.nio.file` `File`, `Files`, stream types |
+| `--threading-mapping` | System.Threading: `Thread`, `java.util.concurrent` |
+| `--text-mapping` | System.Text: `StringBuilder`, `MessageFormat` |
+| `--time-mapping` | System.Time: `java.time` `LocalDate`, `Instant`, `Duration`, `ZoneId` |
+| `--regex-mapping` | System.Text.RegularExpressions: `Pattern` → `Regex`, `Matcher` → `Match` |
+| `--numerics-mapping` | System.Numerics: `BigInteger`, `BigDecimal` |
+
+Use `--all-mapping` to enable every built-in spec at once.
+
 ```
+JavaToCSharpCli --console-mapping --collections-mapping file Foo.java
+```
+
+GUI: check the specs under the **Mappings** tab in Settings. Library users call
+`BuiltInMappings.Load(BuiltInMappingSpec.Console, ...)` or add specs to a builder:
+`new TypeMappingBuilder().AddBuiltIn(BuiltInMappingSpec.Console).AddYamlFiles([...]).Build()`.
+
+See [MAPPING_FILES.md](MAPPING_FILES.md) for the full YAML schema, chain-resolution rules, the built-in
+specs table, and step-by-step instructions for writing and testing mapping files.
 
 ## .NET Support
 
