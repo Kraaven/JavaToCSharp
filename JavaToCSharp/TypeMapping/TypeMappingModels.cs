@@ -18,11 +18,12 @@ public enum MemberMappingKind
     Unsupported,
 }
 
-/// <summary>Whether a mapping entry applies to a method or a field.</summary>
+/// <summary>Whether a mapping entry applies to a method, a field, or a constructor.</summary>
 public enum MemberMappingType
 {
     Method,
     Field,
+    Constructor,
 }
 
 /// <summary>Metadata describing what kind of Java type a class mapping represents.</summary>
@@ -75,6 +76,7 @@ public sealed class ClassMapping
         string csharpClass,
         bool isGeneric,
         ClassMappingKind kind,
+        bool matchQualifiedOnly,
         IReadOnlyList<MemberMapping> entries)
     {
         SourceFile = sourceFile;
@@ -82,6 +84,7 @@ public sealed class ClassMapping
         CSharpClass = csharpClass;
         IsGeneric = isGeneric;
         Kind = kind;
+        MatchQualifiedOnly = matchQualifiedOnly;
         Entries = entries;
     }
 
@@ -95,6 +98,14 @@ public sealed class ClassMapping
     public bool IsGeneric { get; }
 
     public ClassMappingKind Kind { get; }
+
+    /// <summary>
+    /// When true, the mapping is only applied through the fully qualified Java class name.
+    /// The class is excluded from simple-name lookup, so it never steals references written
+    /// as a bare simple name (e.g. <c>Packet</c>) even when no other class claims that name.
+    /// Use for placeholder classes whose simple name collides with unrelated target types.
+    /// </summary>
+    public bool MatchQualifiedOnly { get; }
 
     public IReadOnlyList<MemberMapping> Entries { get; }
 
@@ -122,7 +133,8 @@ public sealed class MemberMapping
         IReadOnlyList<string>? typeHint,
         MappingConfidence confidence,
         string? notes,
-        IReadOnlyList<ClassMapping> classMap)
+        IReadOnlyList<ClassMapping> classMap,
+        string? returnsType)
     {
         SourceFile = sourceFile;
         OwnerClass = ownerClass;
@@ -137,6 +149,7 @@ public sealed class MemberMapping
         Confidence = confidence;
         Notes = notes;
         ClassMap = classMap;
+        ReturnsType = returnsType;
     }
 
     public string SourceFile { get; }
@@ -171,6 +184,12 @@ public sealed class MemberMapping
 
     /// <summary>Nested class mappings owned by this member (routing nodes).</summary>
     public IReadOnlyList<ClassMapping> ClassMap { get; }
+
+    /// <summary>
+    /// The Java return type of this method, used by chain resolution to resolve
+    /// chained calls when the variable's declared type is not available.
+    /// </summary>
+    public string? ReturnsType { get; }
 
     /// <summary>
     /// The unique lookup key for a member entry. Type-hint entries share a key only when

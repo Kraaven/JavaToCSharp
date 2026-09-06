@@ -21,6 +21,37 @@ public static class UsingsHelper
             var importNameWithoutClassName = lastPartStartIndex == -1 ?
                                                  importName :
                                                  importName[..lastPartStartIndex];
+
+            bool isStatic = import.isStatic();
+
+            if (isStatic)
+            {
+                // Static import: "import static X.Y.Z.method" -> "using static X.Y.Z;"
+                // The full path including the class name becomes the using static target.
+                var staticTarget = TypeHelper.Capitalize(importName);
+
+                if (options?.MappingIndex is not null
+                    && options.MappingIndex.TryGetCSharpPackages(importNameWithoutClassName, out var staticCsharpPackages))
+                {
+                    // Replace the package part with the mapped namespace, keep the class name
+                    var mappedPackage = staticCsharpPackages[0];
+                    var className = importName[(lastPartStartIndex + 1)..];
+                    staticTarget = mappedPackage + "." + className;
+                }
+
+                var staticUsing = SyntaxFactory.UsingDirective(
+                    SyntaxFactory.NameEquals(SyntaxFactory.IdentifierName("static")),
+                    SyntaxFactory.ParseName(staticTarget));
+
+                if (context.Options.IncludeComments)
+                {
+                    staticUsing = CommentsHelper.AddUsingComments(staticUsing, import);
+                }
+
+                usings.Add(staticUsing.NormalizeWhitespace().WithTrailingNewLines());
+                continue;
+            }
+
             var nameSpace = TypeHelper.Capitalize(importNameWithoutClassName);
 
             // Derive the namespace from the mapping index's package-to-namespace rows.

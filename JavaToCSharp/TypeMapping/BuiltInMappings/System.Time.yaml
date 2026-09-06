@@ -1,0 +1,1157 @@
+namespaces:
+  - java_packages: [java.time, java.time.temporal, java.time.format]
+    csharp_packages: [System]
+
+class_map:
+  # ============================================================
+  # java.time.LocalDate
+  # ============================================================
+  - java_class: java.time.LocalDate
+    csharp_class: DateTime
+    kind: class
+    confidence: medium
+    notes: "Java LocalDate has no time component; C# DateTime always has time (default midnight)."
+    entries:
+      - java_member: now
+        arg_count: 0
+        kind: template
+        expression: "DateTime.Today"
+        returns_type: java.time.LocalDate
+      - java_member: of
+        arg_count: 3
+        kind: template
+        expression: "new DateTime($1, $2, $3)"
+        returns_type: java.time.LocalDate
+      - java_member: ofYearDay
+        arg_count: 2
+        kind: template
+        expression: "new DateTime($1, 1, 1).AddDays($2 - 1)"
+        confidence: medium
+        notes: "ofYearDay(year, dayOfYear) is approximate."
+        returns_type: java.time.LocalDate
+      - java_member: parse
+        arg_count: 1
+        kind: template
+        expression: "DateTime.Parse($1)"
+        returns_type: java.time.LocalDate
+      - java_member: parse
+        arg_count: 2
+        kind: template
+        expression: "DateTime.ParseExact($1, $2, System.Globalization.CultureInfo.InvariantCulture)"
+        returns_type: java.time.LocalDate
+      - java_member: getYear
+        arg_count: 0
+        kind: property
+        csharp_member: Year
+      - java_member: getMonthValue
+        arg_count: 0
+        kind: property
+        csharp_member: Month
+      - java_member: getDayOfMonth
+        arg_count: 0
+        kind: property
+        csharp_member: Day
+      - java_member: getDayOfWeek
+        arg_count: 0
+        kind: template
+        expression: "$0.DayOfWeek"
+        confidence: medium
+        notes: "Java DayOfWeek enum values differ from C# DayOfWeek enum."
+      - java_member: getDayOfYear
+        arg_count: 0
+        kind: template
+        expression: "$0.DayOfYear"
+      - java_member: plusDays
+        arg_count: 1
+        kind: template
+        expression: "$0.AddDays($1)"
+        returns_type: java.time.LocalDate
+      - java_member: plusWeeks
+        arg_count: 1
+        kind: template
+        expression: "$0.AddDays($1 * 7)"
+        returns_type: java.time.LocalDate
+      - java_member: plusMonths
+        arg_count: 1
+        kind: template
+        expression: "$0.AddMonths($1)"
+        returns_type: java.time.LocalDate
+      - java_member: plusYears
+        arg_count: 1
+        kind: template
+        expression: "$0.AddYears($1)"
+        returns_type: java.time.LocalDate
+      - java_member: minusDays
+        arg_count: 1
+        kind: template
+        expression: "$0.AddDays(-$1)"
+        returns_type: java.time.LocalDate
+      - java_member: minusWeeks
+        arg_count: 1
+        kind: template
+        expression: "$0.AddDays(-$1 * 7)"
+        returns_type: java.time.LocalDate
+      - java_member: minusMonths
+        arg_count: 1
+        kind: template
+        expression: "$0.AddMonths(-$1)"
+        returns_type: java.time.LocalDate
+      - java_member: minusYears
+        arg_count: 1
+        kind: template
+        expression: "$0.AddYears(-$1)"
+        returns_type: java.time.LocalDate
+      - java_member: withDayOfMonth
+        arg_count: 1
+        kind: template
+        expression: "$0.AddDays($1 - $0.Day)"
+        returns_type: java.time.LocalDate
+      - java_member: withDayOfYear
+        arg_count: 1
+        kind: template
+        expression: "new DateTime($0.Year, 1, 1).AddDays($1 - 1)"
+        returns_type: java.time.LocalDate
+      - java_member: withMonth
+        arg_count: 1
+        kind: template
+        expression: "$0.AddMonths($1 - $0.Month)"
+        returns_type: java.time.LocalDate
+      - java_member: withYear
+        arg_count: 1
+        kind: template
+        expression: "$0.AddYears($1 - $0.Year)"
+        returns_type: java.time.LocalDate
+      - java_member: isBefore
+        arg_count: 1
+        kind: template
+        expression: "$0 < $1"
+      - java_member: isAfter
+        arg_count: 1
+        kind: template
+        expression: "$0 > $1"
+      - java_member: isEqual
+        arg_count: 1
+        kind: template
+        expression: "$0 == $1"
+      - java_member: compareTo
+        arg_count: 1
+        kind: template
+        expression: "$0.CompareTo($1)"
+      - java_member: toEpochDay
+        arg_count: 0
+        kind: template
+        expression: "(long)($0 - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalDays"
+      - java_member: isLeapYear
+        arg_count: 1
+        kind: template
+        expression: "DateTime.IsLeapYear($1)"
+      - java_member: lengthOfMonth
+        arg_count: 0
+        kind: template
+        expression: "$0.AddMonths(1).AddDays(-$0.Day).Day"
+      - java_member: lengthOfYear
+        arg_count: 0
+        kind: template
+        expression: "DateTime.IsLeapYear($0.Year) ? 366 : 365"
+      - java_member: atStartOfDay
+        arg_count: 0
+        kind: template
+        expression: "$0.Date"
+        returns_type: java.time.LocalDateTime
+      - java_member: atTime
+        arg_count: 2
+        kind: template
+        expression: "$0.AddHours($1).AddMinutes($2)"
+        returns_type: java.time.LocalDateTime
+      - java_member: until
+        arg_count: 2
+        kind: unsupported
+        notes: "Java LocalDate.until(Temporal, TemporalUnit) has no simple C# equivalent."
+      - java_member: format
+        arg_count: 1
+        kind: template
+        expression: "$0.ToString($1)"
+        confidence: medium
+        notes: "Java DateTimeFormatter and C# format strings have different syntax."
+        returns_type: java.lang.String
+
+  # ============================================================
+  # java.time.LocalDateTime
+  # ============================================================
+  - java_class: java.time.LocalDateTime
+    csharp_class: DateTime
+    kind: class
+    entries:
+      - java_member: now
+        arg_count: 0
+        kind: template
+        expression: "DateTime.Now"
+        returns_type: java.time.LocalDateTime
+      - java_member: of
+        arg_count: 5
+        kind: template
+        expression: "new DateTime($1, $2, $3, $4, $5, 0)"
+        returns_type: java.time.LocalDateTime
+      - java_member: of
+        arg_count: 6
+        kind: template
+        expression: "new DateTime($1, $2, $3, $4, $5, $6)"
+        returns_type: java.time.LocalDateTime
+      - java_member: ofEpochSecond
+        arg_count: 1
+        kind: template
+        expression: "DateTimeOffset.FromUnixTimeSeconds($1).LocalDateTime"
+        returns_type: java.time.LocalDateTime
+      - java_member: parse
+        arg_count: 1
+        kind: template
+        expression: "DateTime.Parse($1)"
+        returns_type: java.time.LocalDateTime
+      - java_member: parse
+        arg_count: 2
+        kind: template
+        expression: "DateTime.ParseExact($1, $2, System.Globalization.CultureInfo.InvariantCulture)"
+        returns_type: java.time.LocalDateTime
+      - java_member: getYear
+        arg_count: 0
+        kind: property
+        csharp_member: Year
+      - java_member: getMonthValue
+        arg_count: 0
+        kind: property
+        csharp_member: Month
+      - java_member: getDayOfMonth
+        arg_count: 0
+        kind: property
+        csharp_member: Day
+      - java_member: getHour
+        arg_count: 0
+        kind: property
+        csharp_member: Hour
+      - java_member: getMinute
+        arg_count: 0
+        kind: property
+        csharp_member: Minute
+      - java_member: getSecond
+        arg_count: 0
+        kind: property
+        csharp_member: Second
+      - java_member: getNano
+        arg_count: 0
+        kind: template
+        expression: "$0.Ticks % TimeSpan.TicksPerSecond * 100"
+        confidence: medium
+        notes: "Java nano of second is nanoseconds; C# ticks are 100-nanosecond intervals."
+      - java_member: plusDays
+        arg_count: 1
+        kind: template
+        expression: "$0.AddDays($1)"
+        returns_type: java.time.LocalDateTime
+      - java_member: plusHours
+        arg_count: 1
+        kind: template
+        expression: "$0.AddHours($1)"
+        returns_type: java.time.LocalDateTime
+      - java_member: plusMinutes
+        arg_count: 1
+        kind: template
+        expression: "$0.AddMinutes($1)"
+        returns_type: java.time.LocalDateTime
+      - java_member: plusSeconds
+        arg_count: 1
+        kind: template
+        expression: "$0.AddSeconds($1)"
+        returns_type: java.time.LocalDateTime
+      - java_member: plusMonths
+        arg_count: 1
+        kind: template
+        expression: "$0.AddMonths($1)"
+        returns_type: java.time.LocalDateTime
+      - java_member: plusYears
+        arg_count: 1
+        kind: template
+        expression: "$0.AddYears($1)"
+        returns_type: java.time.LocalDateTime
+      - java_member: minusDays
+        arg_count: 1
+        kind: template
+        expression: "$0.AddDays(-$1)"
+        returns_type: java.time.LocalDateTime
+      - java_member: minusHours
+        arg_count: 1
+        kind: template
+        expression: "$0.AddHours(-$1)"
+        returns_type: java.time.LocalDateTime
+      - java_member: minusMinutes
+        arg_count: 1
+        kind: template
+        expression: "$0.AddMinutes(-$1)"
+        returns_type: java.time.LocalDateTime
+      - java_member: minusSeconds
+        arg_count: 1
+        kind: template
+        expression: "$0.AddSeconds(-$1)"
+        returns_type: java.time.LocalDateTime
+      - java_member: minusMonths
+        arg_count: 1
+        kind: template
+        expression: "$0.AddMonths(-$1)"
+        returns_type: java.time.LocalDateTime
+      - java_member: minusYears
+        arg_count: 1
+        kind: template
+        expression: "$0.AddYears(-$1)"
+        returns_type: java.time.LocalDateTime
+      - java_member: isBefore
+        arg_count: 1
+        kind: template
+        expression: "$0 < $1"
+      - java_member: isAfter
+        arg_count: 1
+        kind: template
+        expression: "$0 > $1"
+      - java_member: isEqual
+        arg_count: 1
+        kind: template
+        expression: "$0 == $1"
+      - java_member: compareTo
+        arg_count: 1
+        kind: template
+        expression: "$0.CompareTo($1)"
+      - java_member: toLocalDate
+        arg_count: 0
+        kind: template
+        expression: "$0.Date"
+        returns_type: java.time.LocalDate
+      - java_member: toLocalTime
+        arg_count: 0
+        kind: template
+        expression: "$0.TimeOfDay"
+        returns_type: java.time.LocalTime
+      - java_member: toInstant
+        arg_count: 0
+        kind: template
+        expression: "new DateTimeOffset($0)"
+        confidence: medium
+        notes: "Java toInstant() uses UTC; C# DateTimeOffset may carry offset info."
+        returns_type: java.time.Instant
+      - java_member: format
+        arg_count: 1
+        kind: template
+        expression: "$0.ToString($1)"
+        confidence: medium
+        notes: "Java DateTimeFormatter and C# format strings have different syntax."
+        returns_type: java.lang.String
+
+  # ============================================================
+  # java.time.LocalTime
+  # ============================================================
+  - java_class: java.time.LocalTime
+    csharp_class: DateTime
+    kind: class
+    confidence: medium
+    notes: "Java LocalTime has no date component; C# DateTime always has a date (default today)."
+    entries:
+      - java_member: now
+        arg_count: 0
+        kind: template
+        expression: "DateTime.Now"
+        returns_type: java.time.LocalTime
+      - java_member: of
+        arg_count: 2
+        kind: template
+        expression: "new DateTime(1, 1, 1, $1, $2, 0)"
+        returns_type: java.time.LocalTime
+      - java_member: of
+        arg_count: 3
+        kind: template
+        expression: "new DateTime(1, 1, 1, $1, $2, $3)"
+        returns_type: java.time.LocalTime
+      - java_member: of
+        arg_count: 4
+        kind: template
+        expression: "new DateTime(1, 1, 1, $1, $2, $3).AddTicks($4 / 100)"
+        confidence: medium
+        returns_type: java.time.LocalTime
+      - java_member: parse
+        arg_count: 1
+        kind: template
+        expression: "DateTime.Parse($1)"
+        returns_type: java.time.LocalTime
+      - java_member: getHour
+        arg_count: 0
+        kind: property
+        csharp_member: Hour
+      - java_member: getMinute
+        arg_count: 0
+        kind: property
+        csharp_member: Minute
+      - java_member: getSecond
+        arg_count: 0
+        kind: property
+        csharp_member: Second
+      - java_member: plusHours
+        arg_count: 1
+        kind: template
+        expression: "$0.AddHours($1)"
+        returns_type: java.time.LocalTime
+      - java_member: plusMinutes
+        arg_count: 1
+        kind: template
+        expression: "$0.AddMinutes($1)"
+        returns_type: java.time.LocalTime
+      - java_member: plusSeconds
+        arg_count: 1
+        kind: template
+        expression: "$0.AddSeconds($1)"
+        returns_type: java.time.LocalTime
+      - java_member: isBefore
+        arg_count: 1
+        kind: template
+        expression: "$0 < $1"
+      - java_member: isAfter
+        arg_count: 1
+        kind: template
+        expression: "$0 > $1"
+      - java_member: toSecondOfDay
+        arg_count: 0
+        kind: template
+        expression: "(int)$0.TimeOfDay.TotalSeconds"
+      - java_member: toNanoOfDay
+        arg_count: 0
+        kind: template
+        expression: "$0.TimeOfDay.Ticks * 100"
+
+  # ============================================================
+  # java.time.ZonedDateTime
+  # ============================================================
+  - java_class: java.time.ZonedDateTime
+    csharp_class: DateTimeOffset
+    kind: class
+    entries:
+      - java_member: now
+        arg_count: 0
+        kind: template
+        expression: "DateTimeOffset.Now"
+        returns_type: java.time.ZonedDateTime
+      - java_member: parse
+        arg_count: 1
+        kind: template
+        expression: "DateTimeOffset.Parse($1)"
+        returns_type: java.time.ZonedDateTime
+      - java_member: of
+        arg_count: 5
+        kind: template
+        expression: "new DateTimeOffset($1, $2, $3, $4, $5, 0, TimeSpan.Zero)"
+        confidence: medium
+        notes: "Java ZonedDateTime.of uses ZoneId; C# DateTimeOffset uses TimeSpan offset."
+        returns_type: java.time.ZonedDateTime
+      - java_member: ofInstant
+        arg_count: 2
+        kind: template
+        expression: "new DateTimeOffset($1.ToUnixTimeMilliseconds(), TimeSpan.Zero)"
+        confidence: low
+        notes: "Java ofInstant(Instant, ZoneId) — ZoneId is ignored."
+        returns_type: java.time.ZonedDateTime
+      - java_member: getYear
+        arg_count: 0
+        kind: property
+        csharp_member: Year
+      - java_member: getMonthValue
+        arg_count: 0
+        kind: property
+        csharp_member: Month
+      - java_member: getDayOfMonth
+        arg_count: 0
+        kind: property
+        csharp_member: Day
+      - java_member: getHour
+        arg_count: 0
+        kind: property
+        csharp_member: Hour
+      - java_member: getMinute
+        arg_count: 0
+        kind: property
+        csharp_member: Minute
+      - java_member: getSecond
+        arg_count: 0
+        kind: property
+        csharp_member: Second
+      - java_member: getOffset
+        arg_count: 0
+        kind: template
+        expression: "$0.Offset"
+      - java_member: getZone
+        arg_count: 0
+        kind: unsupported
+        notes: "C# DateTimeOffset does not carry a TimeZoneInfo directly."
+      - java_member: toInstant
+        arg_count: 0
+        kind: template
+        expression: "$0"
+        confidence: medium
+        notes: "Java Instant and C# DateTimeOffset have different semantics."
+        returns_type: java.time.Instant
+      - java_member: toLocalDate
+        arg_count: 0
+        kind: template
+        expression: "$0.Date"
+        returns_type: java.time.LocalDate
+      - java_member: toLocalDateTime
+        arg_count: 0
+        kind: template
+        expression: "$0.LocalDateTime"
+        returns_type: java.time.LocalDateTime
+      - java_member: toLocalTime
+        arg_count: 0
+        kind: template
+        expression: "$0.TimeOfDay"
+        returns_type: java.time.LocalTime
+      - java_member: plusDays
+        arg_count: 1
+        kind: template
+        expression: "$0.AddDays($1)"
+        returns_type: java.time.ZonedDateTime
+      - java_member: plusHours
+        arg_count: 1
+        kind: template
+        expression: "$0.AddHours($1)"
+        returns_type: java.time.ZonedDateTime
+      - java_member: plusMinutes
+        arg_count: 1
+        kind: template
+        expression: "$0.AddMinutes($1)"
+        returns_type: java.time.ZonedDateTime
+      - java_member: plusSeconds
+        arg_count: 1
+        kind: template
+        expression: "$0.AddSeconds($1)"
+        returns_type: java.time.ZonedDateTime
+      - java_member: minusDays
+        arg_count: 1
+        kind: template
+        expression: "$0.AddDays(-$1)"
+        returns_type: java.time.ZonedDateTime
+      - java_member: minusHours
+        arg_count: 1
+        kind: template
+        expression: "$0.AddHours(-$1)"
+        returns_type: java.time.ZonedDateTime
+      - java_member: minusMinutes
+        arg_count: 1
+        kind: template
+        expression: "$0.AddMinutes(-$1)"
+        returns_type: java.time.ZonedDateTime
+      - java_member: minusSeconds
+        arg_count: 1
+        kind: template
+        expression: "$0.AddSeconds(-$1)"
+        returns_type: java.time.ZonedDateTime
+      - java_member: isBefore
+        arg_count: 1
+        kind: template
+        expression: "$0 < $1"
+      - java_member: isAfter
+        arg_count: 1
+        kind: template
+        expression: "$0 > $1"
+      - java_member: compareTo
+        arg_count: 1
+        kind: template
+        expression: "$0.CompareTo($1)"
+      - java_member: format
+        arg_count: 1
+        kind: template
+        expression: "$0.ToString($1)"
+        confidence: medium
+        returns_type: java.lang.String
+
+  # ============================================================
+  # java.time.Instant
+  # ============================================================
+  - java_class: java.time.Instant
+    csharp_class: DateTimeOffset
+    kind: class
+    confidence: medium
+    notes: "Java Instant is a point on the UTC timeline; C# DateTimeOffset includes offset."
+    entries:
+      - java_member: now
+        arg_count: 0
+        kind: template
+        expression: "DateTimeOffset.UtcNow"
+        returns_type: java.time.Instant
+      - java_member: ofEpochSecond
+        arg_count: 1
+        kind: template
+        expression: "DateTimeOffset.FromUnixTimeSeconds($1)"
+        returns_type: java.time.Instant
+      - java_member: ofEpochSecond
+        arg_count: 2
+        kind: template
+        expression: "DateTimeOffset.FromUnixTimeSeconds($1)"
+        confidence: medium
+        notes: "Java ofEpochSecond(epochSecond, nanoAdjustment) — nanoAdjustment is ignored."
+        returns_type: java.time.Instant
+      - java_member: ofEpochMilli
+        arg_count: 1
+        kind: template
+        expression: "DateTimeOffset.FromUnixTimeMilliseconds($1)"
+        returns_type: java.time.Instant
+      - java_member: parse
+        arg_count: 1
+        kind: template
+        expression: "DateTimeOffset.Parse($1)"
+        returns_type: java.time.Instant
+      - java_member: toEpochMilli
+        arg_count: 0
+        kind: template
+        expression: "$0.ToUnixTimeMilliseconds()"
+      - java_member: getEpochSecond
+        arg_count: 0
+        kind: template
+        expression: "$0.ToUnixTimeSeconds()"
+      - java_member: getNano
+        arg_count: 0
+        kind: template
+        expression: "($0.Ticks % TimeSpan.TicksPerSecond) * 100"
+        confidence: medium
+        notes: "Java nano of second is nanoseconds; C# ticks are 100-nanosecond intervals."
+      - java_member: plusSeconds
+        arg_count: 1
+        kind: template
+        expression: "$0.AddSeconds($1)"
+        returns_type: java.time.Instant
+      - java_member: plusMillis
+        arg_count: 1
+        kind: template
+        expression: "$0.AddMilliseconds($1)"
+        returns_type: java.time.Instant
+      - java_member: plusNanos
+        arg_count: 1
+        kind: template
+        expression: "$0.AddTicks($1 / 100)"
+        confidence: medium
+        returns_type: java.time.Instant
+      - java_member: minusSeconds
+        arg_count: 1
+        kind: template
+        expression: "$0.AddSeconds(-$1)"
+        returns_type: java.time.Instant
+      - java_member: minusMillis
+        arg_count: 1
+        kind: template
+        expression: "$0.AddMilliseconds(-$1)"
+        returns_type: java.time.Instant
+      - java_member: minusNanos
+        arg_count: 1
+        kind: template
+        expression: "$0.AddTicks(-$1 / 100)"
+        confidence: medium
+        returns_type: java.time.Instant
+      - java_member: isBefore
+        arg_count: 1
+        kind: template
+        expression: "$0 < $1"
+      - java_member: isAfter
+        arg_count: 1
+        kind: template
+        expression: "$0 > $1"
+      - java_member: compareTo
+        arg_count: 1
+        kind: template
+        expression: "$0.CompareTo($1)"
+      - java_member: atZone
+        arg_count: 1
+        kind: template
+        expression: "$0"
+        confidence: low
+        notes: "Java atZone(ZoneId) adds timezone; C# DateTimeOffset already has offset."
+        returns_type: java.time.ZonedDateTime
+      - java_member: MIN
+        member_type: field
+        kind: template
+        expression: "DateTimeOffset.MinValue"
+      - java_member: MAX
+        member_type: field
+        kind: template
+        expression: "DateTimeOffset.MaxValue"
+
+  # ============================================================
+  # java.time.Duration
+  # ============================================================
+  - java_class: java.time.Duration
+    csharp_class: TimeSpan
+    kind: class
+    entries:
+      - java_member: ofDays
+        arg_count: 1
+        kind: template
+        expression: "TimeSpan.FromDays($1)"
+        returns_type: java.time.Duration
+      - java_member: ofHours
+        arg_count: 1
+        kind: template
+        expression: "TimeSpan.FromHours($1)"
+        returns_type: java.time.Duration
+      - java_member: ofMinutes
+        arg_count: 1
+        kind: template
+        expression: "TimeSpan.FromMinutes($1)"
+        returns_type: java.time.Duration
+      - java_member: ofSeconds
+        arg_count: 1
+        kind: template
+        expression: "TimeSpan.FromSeconds($1)"
+        returns_type: java.time.Duration
+      - java_member: ofMillis
+        arg_count: 1
+        kind: template
+        expression: "TimeSpan.FromMilliseconds($1)"
+        returns_type: java.time.Duration
+      - java_member: ofNanos
+        arg_count: 1
+        kind: template
+        expression: "TimeSpan.FromTicks($1 / 100)"
+        confidence: medium
+        notes: "1 tick = 100 nanoseconds; nanosecond precision is lost."
+        returns_type: java.time.Duration
+      - java_member: ofSeconds
+        arg_count: 2
+        kind: template
+        expression: "TimeSpan.FromSeconds($1).Add(TimeSpan.FromTicks($2))"
+        confidence: medium
+        notes: "Java ofSeconds(seconds, nanoAdjustment) — nano is approximate."
+        returns_type: java.time.Duration
+      - java_member: between
+        arg_count: 2
+        kind: template
+        expression: "$2 - $1"
+        confidence: medium
+        notes: "Java Duration.between(start, end) works with any Temporal; C# uses subtraction."
+        returns_type: java.time.Duration
+      - java_member: parse
+        arg_count: 1
+        kind: template
+        expression: "TimeSpan.Parse($1)"
+        confidence: medium
+        notes: "Java ISO-8601 duration format differs slightly from C# TimeSpan format."
+        returns_type: java.time.Duration
+      - java_member: toDays
+        arg_count: 0
+        kind: template
+        expression: "(long)$0.TotalDays"
+      - java_member: toHours
+        arg_count: 0
+        kind: template
+        expression: "(long)$0.TotalHours"
+      - java_member: toMinutes
+        arg_count: 0
+        kind: template
+        expression: "(long)$0.TotalMinutes"
+      - java_member: toSeconds
+        arg_count: 0
+        kind: template
+        expression: "(long)$0.TotalSeconds"
+      - java_member: toMillis
+        arg_count: 0
+        kind: template
+        expression: "(long)$0.TotalMilliseconds"
+      - java_member: toNanos
+        arg_count: 0
+        kind: template
+        expression: "$0.Ticks * 100"
+        confidence: medium
+        notes: "C# ticks are 100 nanoseconds; nanosecond precision may be lost."
+      - java_member: getSeconds
+        arg_count: 0
+        kind: template
+        expression: "(long)$0.TotalSeconds"
+      - java_member: getNano
+        arg_count: 0
+        kind: template
+        expression: "($0.Ticks % TimeSpan.TicksPerSecond) * 100"
+      - java_member: plus
+        arg_count: 1
+        kind: template
+        expression: "$0 + $1"
+        returns_type: java.time.Duration
+      - java_member: plusDays
+        arg_count: 1
+        kind: template
+        expression: "$0.AddDays($1)"
+        returns_type: java.time.Duration
+      - java_member: plusHours
+        arg_count: 1
+        kind: template
+        expression: "$0.AddHours($1)"
+        returns_type: java.time.Duration
+      - java_member: plusMinutes
+        arg_count: 1
+        kind: template
+        expression: "$0.AddMinutes($1)"
+        returns_type: java.time.Duration
+      - java_member: plusSeconds
+        arg_count: 1
+        kind: template
+        expression: "$0.AddSeconds($1)"
+        returns_type: java.time.Duration
+      - java_member: plusMillis
+        arg_count: 1
+        kind: template
+        expression: "$0.AddMilliseconds($1)"
+        returns_type: java.time.Duration
+      - java_member: plusNanos
+        arg_count: 1
+        kind: template
+        expression: "$0.AddTicks($1 / 100)"
+        returns_type: java.time.Duration
+      - java_member: minus
+        arg_count: 1
+        kind: template
+        expression: "$0 - $1"
+        returns_type: java.time.Duration
+      - java_member: minusDays
+        arg_count: 1
+        kind: template
+        expression: "$0.AddDays(-$1)"
+        returns_type: java.time.Duration
+      - java_member: minusHours
+        arg_count: 1
+        kind: template
+        expression: "$0.AddHours(-$1)"
+        returns_type: java.time.Duration
+      - java_member: minusMinutes
+        arg_count: 1
+        kind: template
+        expression: "$0.AddMinutes(-$1)"
+        returns_type: java.time.Duration
+      - java_member: minusSeconds
+        arg_count: 1
+        kind: template
+        expression: "$0.AddSeconds(-$1)"
+        returns_type: java.time.Duration
+      - java_member: minusMillis
+        arg_count: 1
+        kind: template
+        expression: "$0.AddMilliseconds(-$1)"
+        returns_type: java.time.Duration
+      - java_member: minusNanos
+        arg_count: 1
+        kind: template
+        expression: "$0.AddTicks(-$1 / 100)"
+        returns_type: java.time.Duration
+      - java_member: multipliedBy
+        arg_count: 1
+        kind: template
+        expression: "new TimeSpan($0.Ticks * $1)"
+        returns_type: java.time.Duration
+      - java_member: dividedBy
+        arg_count: 1
+        kind: template
+        expression: "new TimeSpan($0.Ticks / $1)"
+        returns_type: java.time.Duration
+      - java_member: negated
+        arg_count: 0
+        kind: template
+        expression: "$0.Negate()"
+        returns_type: java.time.Duration
+      - java_member: abs
+        arg_count: 0
+        kind: template
+        expression: "$0.Duration()"
+        returns_type: java.time.Duration
+      - java_member: isZero
+        arg_count: 0
+        kind: template
+        expression: "$0 == TimeSpan.Zero"
+      - java_member: isNegative
+        arg_count: 0
+        kind: template
+        expression: "$0 < TimeSpan.Zero"
+      - java_member: isPositive
+        arg_count: 0
+        kind: template
+        expression: "$0 > TimeSpan.Zero"
+      - java_member: compareTo
+        arg_count: 1
+        kind: template
+        expression: "$0.CompareTo($1)"
+      - java_member: withDays
+        arg_count: 1
+        kind: template
+        expression: "TimeSpan.FromDays($1).Add(TimeSpan.FromTicks($0.Ticks % TimeSpan.TicksPerDay))"
+        confidence: medium
+        returns_type: java.time.Duration
+      - java_member: withSeconds
+        arg_count: 1
+        kind: template
+        expression: "TimeSpan.FromSeconds($1).Add(TimeSpan.FromTicks($0.Ticks % TimeSpan.TicksPerSecond))"
+        confidence: medium
+        returns_type: java.time.Duration
+      - java_member: withNanos
+        arg_count: 1
+        kind: template
+        expression: "new TimeSpan(($0.Ticks / TimeSpan.TicksPerSecond) * TimeSpan.TicksPerSecond + $1 / 100)"
+        confidence: medium
+        returns_type: java.time.Duration
+      - java_member: toString
+        arg_count: 0
+        kind: rename
+        csharp_member: ToString
+        returns_type: java.lang.String
+      - java_member: ZERO
+        member_type: field
+        kind: template
+        expression: "TimeSpan.Zero"
+      - java_member: MAX_VALUE
+        member_type: field
+        kind: template
+        expression: "TimeSpan.MaxValue"
+      - java_member: MIN_VALUE
+        member_type: field
+        kind: template
+        expression: "TimeSpan.MinValue"
+
+  # ============================================================
+  # java.time.Period
+  # ============================================================
+  - java_class: java.time.Period
+    csharp_class: TimeSpan
+    kind: class
+    confidence: low
+    notes: "Java Period represents years/months/days; C# TimeSpan represents a fixed duration. Conversion is approximate."
+    entries:
+      - java_member: of
+        arg_count: 3
+        kind: template
+        expression: "new TimeSpan($1 * 365 + $2 * 30 + $3, 0, 0, 0)"
+        confidence: low
+        notes: "Approximate: 1 month = 30 days, 1 year = 365 days."
+        returns_type: java.time.Period
+      - java_member: ofYears
+        arg_count: 1
+        kind: template
+        expression: "TimeSpan.FromDays($1 * 365)"
+        confidence: low
+        returns_type: java.time.Period
+      - java_member: ofMonths
+        arg_count: 1
+        kind: template
+        expression: "TimeSpan.FromDays($1 * 30)"
+        confidence: low
+        returns_type: java.time.Period
+      - java_member: ofDays
+        arg_count: 1
+        kind: template
+        expression: "TimeSpan.FromDays($1)"
+        returns_type: java.time.Period
+      - java_member: getYears
+        arg_count: 0
+        kind: unsupported
+        notes: "C# TimeSpan does not store years separately."
+      - java_member: getMonths
+        arg_count: 0
+        kind: unsupported
+        notes: "C# TimeSpan does not store months separately."
+      - java_member: getDays
+        arg_count: 0
+        kind: template
+        expression: "$0.Days"
+      - java_member: toDays
+        arg_count: 0
+        kind: template
+        expression: "(long)$0.TotalDays"
+      - java_member: plus
+        arg_count: 1
+        kind: template
+        expression: "$0 + $1"
+        returns_type: java.time.Period
+      - java_member: minus
+        arg_count: 1
+        kind: template
+        expression: "$0 - $1"
+        returns_type: java.time.Period
+      - java_member: multipliedBy
+        arg_count: 1
+        kind: template
+        expression: "new TimeSpan($0.Ticks * $1)"
+        returns_type: java.time.Period
+      - java_member: negated
+        arg_count: 0
+        kind: template
+        expression: "$0.Negate()"
+        returns_type: java.time.Period
+      - java_member: isZero
+        arg_count: 0
+        kind: template
+        expression: "$0 == TimeSpan.Zero"
+      - java_member: isNegative
+        arg_count: 0
+        kind: template
+        expression: "$0 < TimeSpan.Zero"
+      - java_member: isPositive
+        arg_count: 0
+        kind: template
+        expression: "$0 > TimeSpan.Zero"
+      - java_member: ZERO
+        member_type: field
+        kind: template
+        expression: "TimeSpan.Zero"
+
+  # ============================================================
+  # java.time.temporal.ChronoUnit
+  # ============================================================
+  - java_class: java.time.temporal.ChronoUnit
+    csharp_class: object
+    kind: class
+    confidence: low
+    notes: "Java ChronoUnit has no direct C# equivalent. Use TimeSpan or custom extensions."
+    entries:
+      - java_member: NANOS
+        member_type: field
+        kind: unsupported
+        notes: "No direct C# equivalent for ChronoUnit.NANOS."
+      - java_member: MICROS
+        member_type: field
+        kind: unsupported
+      - java_member: MILLIS
+        member_type: field
+        kind: unsupported
+      - java_member: SECONDS
+        member_type: field
+        kind: unsupported
+      - java_member: MINUTES
+        member_type: field
+        kind: unsupported
+      - java_member: HOURS
+        member_type: field
+        kind: unsupported
+      - java_member: HALF_DAYS
+        member_type: field
+        kind: unsupported
+      - java_member: DAYS
+        member_type: field
+        kind: unsupported
+      - java_member: WEEKS
+        member_type: field
+        kind: unsupported
+      - java_member: MONTHS
+        member_type: field
+        kind: unsupported
+      - java_member: YEARS
+        member_type: field
+        kind: unsupported
+      - java_member: CENTURIES
+        member_type: field
+        kind: unsupported
+      - java_member: MILLENNIA
+        member_type: field
+        kind: unsupported
+      - java_member: FOREVER
+        member_type: field
+        kind: unsupported
+      - java_member: between
+        arg_count: 2
+        kind: unsupported
+        notes: "ChronoUnit.between requires temporal types; no simple C# mapping."
+
+  # ============================================================
+  # java.time.temporal.TemporalAdjusters
+  # ============================================================
+  - java_class: java.time.temporal.TemporalAdjusters
+    csharp_class: object
+    kind: class
+    confidence: low
+    notes: "No direct C# equivalent; implement using DateTime methods."
+    entries:
+      - java_member: firstDayOfMonth
+        arg_count: 0
+        kind: unsupported
+      - java_member: lastDayOfMonth
+        arg_count: 0
+        kind: unsupported
+      - java_member: firstDayOfYear
+        arg_count: 0
+        kind: unsupported
+      - java_member: lastDayOfYear
+        arg_count: 0
+        kind: unsupported
+      - java_member: next
+        arg_count: 1
+        kind: unsupported
+      - java_member: previous
+        arg_count: 1
+        kind: unsupported
+
+  # ============================================================
+  # java.time.format.DateTimeFormatter
+  # ============================================================
+  - java_class: java.time.format.DateTimeFormatter
+    csharp_class: string
+    kind: class
+    confidence: low
+    notes: "Java DateTimeFormatter and C# format strings have different syntax. Map pattern strings."
+    entries:
+      - java_member: ofPattern
+        arg_count: 1
+        kind: template
+        expression: "$1"
+        confidence: low
+        notes: "Java DateTimeFormatter patterns (yyyy-MM-dd) differ from C# (yyyy-MM-dd). Review carefully."
+        returns_type: java.time.format.DateTimeFormatter
+      - java_member: ofPattern
+        arg_count: 2
+        kind: template
+        expression: "$1"
+        confidence: low
+        notes: "Java DateTimeFormatter.ofPattern(pattern, style) — style parameter is ignored."
+        returns_type: java.time.format.DateTimeFormatter
+      - java_member: ISO_LOCAL_DATE
+        member_type: field
+        kind: template
+        expression: "\"yyyy-MM-dd\""
+      - java_member: ISO_LOCAL_TIME
+        member_type: field
+        kind: template
+        expression: "\"HH:mm:ss\""
+      - java_member: ISO_LOCAL_DATE_TIME
+        member_type: field
+        kind: template
+        expression: "\"yyyy-MM-ddTHH:mm:ss\""
+      - java_member: format
+        arg_count: 2
+        kind: template
+        expression: "$1.ToString($0)"
+        confidence: low
+        notes: "Java formatter.format(temporal) — parameter order is reversed from C#."
+        returns_type: java.lang.String
+
+  # ============================================================
+  # java.time.ZoneId
+  # ============================================================
+  - java_class: java.time.ZoneId
+    csharp_class: TimeZoneInfo
+    kind: class
+    confidence: low
+    notes: "Java ZoneId and C# TimeZoneInfo have different APIs."
+    entries:
+      - java_member: systemDefault
+        arg_count: 0
+        kind: template
+        expression: "TimeZoneInfo.Local"
+        returns_type: java.time.ZoneId
+      - java_member: of
+        arg_count: 1
+        kind: template
+        expression: "TimeZoneInfo.FindSystemTimeZoneById($1)"
+        confidence: medium
+        notes: "Java uses IANA zone IDs; C# uses Windows timezone IDs on Windows."
+        returns_type: java.time.ZoneId
+      - java_member: UTC
+        member_type: field
+        kind: template
+        expression: "TimeZoneInfo.Utc"
+      - java_member: getId
+        arg_count: 0
+        kind: template
+        expression: "$0.Id"

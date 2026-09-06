@@ -33,4 +33,17 @@ public enum BuiltInMappingSpec
     /// <summary>Text builders and formatting → <c>System.Text</c> (<c>StringBuilder</c>,
     /// <c>MessageFormat</c>).</summary>
     SystemText,
+
+    /// <summary><c>java.time</c> date/time types → <c>System</c> (<c>LocalDate</c> →
+    /// <c>DateTime</c>, <c>Duration</c> → <c>TimeSpan</c>, <c>ZoneId</c> →
+    /// <c>TimeZoneInfo</c>).</summary>
+    SystemTime,
+
+    /// <summary><c>java.util.regex</c> → <c>System.Text.RegularExpressions</c>
+    /// (<c>Pattern</c> → <c>Regex</c>, <c>Matcher</c> → <c>Match</c>).</summary>
+    SystemTextRegularExpressions,
+
+    /// <summary>Arbitrary-precision numerics → <c>System.Numerics</c>
+    /// (<c>BigInteger</c>, <c>BigDecimal</c> → <c>decimal</c>).</summary>
+    SystemNumerics,
 }

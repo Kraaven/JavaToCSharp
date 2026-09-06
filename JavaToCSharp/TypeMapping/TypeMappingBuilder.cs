@@ -66,7 +66,8 @@ public sealed class TypeMappingBuilder
         string csharpClass,
         Action<ClassMappingBuilder>? configure = null,
         bool generic = false,
-        ClassMappingKind kind = ClassMappingKind.Class)
+        ClassMappingKind kind = ClassMappingKind.Class,
+        bool matchQualifiedOnly = false)
     {
         var dto = new ClassMappingDto
         {
@@ -74,6 +75,7 @@ public sealed class TypeMappingBuilder
             CSharpClass = csharpClass,
             Generic = generic ? true : null,
             Kind = kind == ClassMappingKind.Class ? null : kind.ToString().ToLowerInvariant(),
+            MatchQualifiedOnly = matchQualifiedOnly ? true : null,
             Entries = [],
         };
 
@@ -172,6 +174,16 @@ public sealed class ClassMappingBuilder
         return this;
     }
 
+    /// <summary>
+    /// Sets whether this class mapping applies only to fully qualified Java references.
+    /// Excludes the class from simple-name lookup.
+    /// </summary>
+    internal ClassMappingBuilder SetMatchQualifiedOnly(bool matchQualifiedOnly)
+    {
+        _dto.MatchQualifiedOnly = matchQualifiedOnly ? true : null;
+        return this;
+    }
+
     /// <summary>Maps a method to a renamed method with the same call shape: <c>Math.pow(a, b)</c>
     /// → <c>Math.Pow(a, b)</c>.</summary>
     public ClassMappingBuilder Rename(
@@ -180,8 +192,9 @@ public sealed class ClassMappingBuilder
         string csharpMember,
         IReadOnlyList<string>? typeHint = null,
         MappingConfidence confidence = MappingConfidence.High,
-        string? notes = null)
-        => AddMember(MemberMappingKind.Rename, javaMember, argCount, null, csharpMember, null, typeHint, confidence, notes);
+        string? notes = null,
+        string? returnsType = null)
+        => AddMember(MemberMappingKind.Rename, javaMember, argCount, null, csharpMember, null, typeHint, confidence, notes, returnsType: returnsType);
 
     /// <summary>Maps a variadic method to a renamed method matching any arity.</summary>
     public ClassMappingBuilder RenameVariadic(
@@ -223,8 +236,9 @@ public sealed class ClassMappingBuilder
         string expression,
         IReadOnlyList<string>? typeHint = null,
         MappingConfidence confidence = MappingConfidence.High,
-        string? notes = null)
-        => AddMember(MemberMappingKind.Template, javaMember, argCount, null, null, expression, typeHint, confidence, notes);
+        string? notes = null,
+        string? returnsType = null)
+        => AddMember(MemberMappingKind.Template, javaMember, argCount, null, null, expression, typeHint, confidence, notes, returnsType: returnsType);
 
     /// <summary>Template mapping for a variadic method.</summary>
     public ClassMappingBuilder TemplateVariadic(
@@ -288,7 +302,8 @@ public sealed class ClassMappingBuilder
         IReadOnlyList<string>? typeHint,
         MappingConfidence confidence,
         string? notes,
-        MemberMappingType? memberType = null)
+        MemberMappingType? memberType = null,
+        string? returnsType = null)
     {
         _entries.Add(new MemberMappingDto
         {
@@ -301,6 +316,7 @@ public sealed class ClassMappingBuilder
             TypeHint = typeHint is null ? null : [.. typeHint],
             Confidence = confidence == MappingConfidence.High ? null : confidence.ToString().ToLowerInvariant(),
             Notes = notes,
+            ReturnsType = returnsType,
         });
         return this;
     }

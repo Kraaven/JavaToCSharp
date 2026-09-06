@@ -1,27 +1,27 @@
-# Built-in mapping spec: java.lang core types -> System
-#
-# Uses templates (not renames) for the boxing types so output uses the bare C#
-# keywords (int.Parse, long.MaxValue) rather than @-escaped identifiers.
 namespaces:
   - java_packages: [java.lang]
     csharp_packages: [System]
 
 class_map:
+  # ============================================================
+  # java.lang.Math
+  # ============================================================
   - java_class: java.lang.Math
     csharp_class: Math
+    kind: class
     entries:
       - java_member: abs
         arg_count: 1
         kind: rename
         csharp_member: Abs
-      - java_member: min
-        arg_count: 2
-        kind: rename
-        csharp_member: Min
       - java_member: max
         arg_count: 2
         kind: rename
         csharp_member: Max
+      - java_member: min
+        arg_count: 2
+        kind: rename
+        csharp_member: Min
       - java_member: pow
         arg_count: 2
         kind: rename
@@ -34,28 +34,14 @@ class_map:
         arg_count: 1
         kind: rename
         csharp_member: Cbrt
-      - java_member: floor
-        arg_count: 1
-        kind: rename
-        csharp_member: Floor
       - java_member: ceil
         arg_count: 1
         kind: rename
         csharp_member: Ceiling
-      - java_member: round
+      - java_member: floor
         arg_count: 1
-        kind: template
-        expression: "(long)Math.Round($1)"
-        confidence: medium
-        notes: "Java rounds half-up; C# Math.Round rounds half-to-even (banker's). Cast to long because Math.Round returns double."
-      - java_member: floorDiv
-        arg_count: 2
-        kind: unsupported
-        notes: "No direct C# equivalent for Java's floor division with negative operands."
-      - java_member: floorMod
-        arg_count: 2
-        kind: unsupported
-        notes: "No direct C# equivalent for Java's floor modulo with negative operands."
+        kind: rename
+        csharp_member: Floor
       - java_member: sin
         arg_count: 1
         kind: rename
@@ -84,18 +70,6 @@ class_map:
         arg_count: 2
         kind: rename
         csharp_member: Atan2
-      - java_member: sinh
-        arg_count: 1
-        kind: rename
-        csharp_member: Sinh
-      - java_member: cosh
-        arg_count: 1
-        kind: rename
-        csharp_member: Cosh
-      - java_member: tanh
-        arg_count: 1
-        kind: rename
-        csharp_member: Tanh
       - java_member: log
         arg_count: 1
         kind: rename
@@ -108,25 +82,126 @@ class_map:
         arg_count: 1
         kind: rename
         csharp_member: Exp
-      - java_member: signum
-        arg_count: 1
-        kind: template
-        expression: "Math.Sign($1)"
-        confidence: medium
-        notes: "Java's Math.signum returns a double; C# Math.Sign returns int with the same -1/0/1 values."
       - java_member: random
         arg_count: 0
         kind: template
         expression: "Random.Shared.NextDouble()"
-        notes: "Uses the shared Random instance; avoids allocating a Random per call site."
-      - java_member: toRadians
+      - java_member: signum
         arg_count: 1
-        kind: template
-        expression: "$1 * Math.PI / 180"
+        kind: rename
+        csharp_member: Sign
       - java_member: toDegrees
         arg_count: 1
         kind: template
-        expression: "$1 * 180 / Math.PI"
+        expression: "(($1) * 180.0 / Math.PI)"
+      - java_member: toRadians
+        arg_count: 1
+        kind: template
+        expression: "(($1) * Math.PI / 180.0)"
+      - java_member: hypot
+        arg_count: 2
+        kind: rename
+        csharp_member: Hypot
+      - java_member: expm1
+        arg_count: 1
+        kind: rename
+        csharp_member: ExpM1
+      - java_member: log1p
+        arg_count: 1
+        kind: rename
+        csharp_member: LogP1
+      - java_member: ulp
+        arg_count: 1
+        kind: rename
+        csharp_member: Ulp
+      - java_member: nextAfter
+        arg_count: 2
+        kind: rename
+        csharp_member: NextAfter
+      - java_member: scalb
+        arg_count: 2
+        kind: rename
+        csharp_member: ScaleB
+      - java_member: clamp
+        arg_count: 3
+        kind: rename
+        csharp_member: Clamp
+      - java_member: negateExact
+        arg_count: 1
+        kind: template
+        expression: "-$1"
+        confidence: medium
+        notes: "C# does not throw on integer overflow by default; use checked() for overflow checking."
+      - java_member: toIntExact
+        arg_count: 1
+        kind: template
+        expression: "(int)$1"
+        confidence: medium
+        notes: "C# does not throw on overflow by default; use checked() to match Java Math.toIntExact."
+      - java_member: IEEEremainder
+        arg_count: 2
+        kind: rename
+        csharp_member: IEEERemainder
+      - java_member: nextUp
+        arg_count: 1
+        kind: rename
+        csharp_member: BitIncrement
+      - java_member: nextDown
+        arg_count: 1
+        kind: rename
+        csharp_member: BitDecrement
+      - java_member: copySign
+        arg_count: 2
+        kind: rename
+        csharp_member: CopySign
+      - java_member: floorDiv
+        arg_count: 2
+        kind: template
+        expression: "(int)Math.Floor((double)$1 / $2)"
+        confidence: medium
+        notes: "Java floorDiv uses integer division rounding toward negative infinity."
+      - java_member: floorMod
+        arg_count: 2
+        kind: template
+        expression: "$1 - (int)Math.Floor((double)$1 / $2) * $2"
+        confidence: medium
+        notes: "Java floorMod result has the sign of the divisor."
+      - java_member: addExact
+        arg_count: 2
+        kind: rename
+        csharp_member: Add
+      - java_member: subtractExact
+        arg_count: 2
+        kind: rename
+        csharp_member: Subtract
+      - java_member: multiplyExact
+        arg_count: 2
+        kind: rename
+        csharp_member: Multiply
+      - java_member: incrementExact
+        arg_count: 1
+        kind: template
+        expression: "$1 + 1"
+        confidence: medium
+        notes: "C# does not throw on integer overflow by default; use checked() for overflow checking."
+      - java_member: decrementExact
+        arg_count: 1
+        kind: template
+        expression: "$1 - 1"
+        confidence: medium
+        notes: "C# does not throw on integer overflow by default; use checked() for overflow checking."
+      - java_member: round
+        arg_count: 1
+        type_hint: [double]
+        kind: template
+        expression: "(long)Math.Round($1)"
+        notes: "Java Math.round(double) returns long; C# Math.Round returns double, so cast to long."
+      - java_member: round
+        arg_count: 1
+        type_hint: [float]
+        kind: template
+        expression: "(int)Math.Round($1)"
+        notes: "Java Math.round(float) returns int; C# Math.Round returns double, so cast to int."
       - java_member: PI
         member_type: field
         kind: rename
@@ -135,25 +210,223 @@ class_map:
         member_type: field
         kind: rename
         csharp_member: E
-      - java_member: copySign
+   # ============================================================
+   # java.lang.String
+  # ============================================================
+  - java_class: java.lang.String
+    csharp_class: String
+    kind: class
+    entries:
+      - java_member: length
+        arg_count: 0
+        kind: property
+        csharp_member: Length
+      - java_member: isEmpty
+        arg_count: 0
+        kind: template
+        expression: "$0.Length == 0"
+      - java_member: charAt
+        arg_count: 1
+        kind: template
+        expression: "$0[$1]"
+      - java_member: substring
+        arg_count: 1
+        kind: template
+        expression: "$0.Substring($1)"
+        returns_type: java.lang.String
+      - java_member: substring
+        arg_count: 2
+        kind: template
+        expression: "$0.Substring($1, $2 - $1)"
+        notes: "Java's endIndex becomes a C# length."
+        returns_type: java.lang.String
+      - java_member: indexOf
+        arg_count: 1
+        kind: rename
+        csharp_member: IndexOf
+      - java_member: indexOf
         arg_count: 2
         kind: rename
-        csharp_member: CopySign
-      - java_member: rint
+        csharp_member: IndexOf
+      - java_member: lastIndexOf
         arg_count: 1
-        kind: unsupported
-      - java_member: scalb
+        kind: rename
+        csharp_member: LastIndexOf
+      - java_member: lastIndexOf
         arg_count: 2
-        kind: unsupported
-      - java_member: getExponent
+        kind: rename
+        csharp_member: LastIndexOf
+      - java_member: contains
         arg_count: 1
-        kind: unsupported
-      - java_member: ulp
+        kind: rename
+        csharp_member: Contains
+      - java_member: startsWith
         arg_count: 1
+        kind: rename
+        csharp_member: StartsWith
+      - java_member: startsWith
+        arg_count: 2
+        kind: rename
+        csharp_member: StartsWith
+      - java_member: endsWith
+        arg_count: 1
+        kind: rename
+        csharp_member: EndsWith
+      - java_member: compareTo
+        arg_count: 1
+        kind: template
+        expression: "string.Compare($0, $1)"
+        confidence: medium
+        notes: "Java compareTo uses Unicode lexicographic order; string.Compare uses the current culture by default."
+      - java_member: compareToIgnoreCase
+        arg_count: 1
+        kind: template
+        expression: "string.Compare($0, $1, StringComparison.OrdinalIgnoreCase)"
+      - java_member: equals
+        arg_count: 1
+        kind: rename
+        csharp_member: Equals
+      - java_member: equalsIgnoreCase
+        arg_count: 1
+        kind: template
+        expression: "string.Equals($0, $1, StringComparison.OrdinalIgnoreCase)"
+      - java_member: split
+        arg_count: 1
+        kind: template
+        expression: "Regex.Split($0, $1)"
+        confidence: medium
+        notes: "Java and .NET regex syntaxes differ slightly; review the pattern."
+      - java_member: replace
+        arg_count: 2
+        kind: template
+        expression: "$0.Replace($1, $2)"
+        confidence: medium
+        notes: "Java replace(char, char) and replace(CharSequence, CharSequence) both map to string.Replace."
+        returns_type: java.lang.String
+      - java_member: replaceAll
+        arg_count: 2
+        kind: template
+        expression: "Regex.Replace($0, $1, $2)"
+        confidence: medium
+        notes: "Java and .NET regex syntaxes differ slightly; review the pattern."
+        returns_type: java.lang.String
+      - java_member: replaceFirst
+        arg_count: 2
+        kind: template
+        expression: "Regex.Replace($0, $1, $2, 1)"
+        confidence: medium
+        notes: "Java and .NET regex syntaxes differ slightly; review the pattern."
+        returns_type: java.lang.String
+      - java_member: trim
+        arg_count: 0
+        kind: rename
+        csharp_member: Trim
+        returns_type: java.lang.String
+      - java_member: strip
+        arg_count: 0
+        kind: rename
+        csharp_member: Trim
+        returns_type: java.lang.String
+      - java_member: stripLeading
+        arg_count: 0
+        kind: template
+        expression: "$0.TrimStart()"
+      - java_member: stripTrailing
+        arg_count: 0
+        kind: template
+        expression: "$0.TrimEnd()"
+      - java_member: isBlank
+        arg_count: 0
+        kind: template
+        expression: "string.IsNullOrWhiteSpace($0)"
+      - java_member: toUpperCase
+        arg_count: 0
+        kind: rename
+        csharp_member: ToUpper
+        returns_type: java.lang.String
+      - java_member: toLowerCase
+        arg_count: 0
+        kind: rename
+        csharp_member: ToLower
+        returns_type: java.lang.String
+      - java_member: repeat
+        arg_count: 1
+        kind: template
+        expression: "string.Concat(System.Linq.Enumerable.Repeat($0, $1))"
+        confidence: medium
+        notes: "Java String.repeat repeats the string; uses LINQ Repeat + Concat."
+        returns_type: java.lang.String
+      - java_member: join
+        arg_count: variadic
+        kind: template
+        expression: "string.Join($1, $rest)"
+        notes: "Java String.join(delimiter, elements); $rest spreads the trailing arguments."
+        returns_type: java.lang.String
+      - java_member: contentEquals
+        arg_count: 1
+        kind: rename
+        csharp_member: Equals
+      - java_member: concat
+        arg_count: 1
+        kind: template
+        expression: "$0 + $1"
+        returns_type: java.lang.String
+      - java_member: toCharArray
+        arg_count: 0
+        kind: rename
+        csharp_member: ToCharArray
+      - java_member: format
+        arg_count: variadic
+        kind: template
+        expression: "string.Format($1, $rest)"
+        returns_type: java.lang.String
+      - java_member: valueOf
+        arg_count: 1
+        kind: template
+        expression: "$1?.ToString() ?? string.Empty"
+        notes: "Java String.valueOf(null) returns \"null\"; C# null?.ToString() returns null."
+        returns_type: java.lang.String
+      - java_member: getBytes
+        arg_count: 0
+        kind: template
+        expression: "System.Text.Encoding.UTF8.GetBytes($0)"
+        confidence: medium
+        notes: "Java uses platform default charset; this assumes UTF-8."
+      - java_member: getBytes
+        arg_count: 1
+        kind: template
+        expression: "System.Text.Encoding.UTF8.GetBytes($0)"
+        confidence: medium
+        notes: "Java charset name parameter is ignored; uses UTF-8."
+      - java_member: intern
+        arg_count: 0
         kind: unsupported
+        notes: "No safe C# equivalent for string interning via this API."
+      - java_member: matches
+        arg_count: 1
+        kind: template
+        expression: "Regex.IsMatch($0, $1)"
+        confidence: medium
+        notes: "Java matches() anchors the pattern; Regex.IsMatch does not. Add ^ and $ to the pattern if needed."
+      - java_member: regionMatches
+        arg_count: 4
+        kind: template
+        expression: "$0.Substring($2, $4).Equals($1.Substring($2, $4))"
+        confidence: low
+        notes: "RegionMatches has complex semantics; review manually."
+      - java_member: regionMatches
+        arg_count: 5
+        kind: template
+        expression: "string.Compare($0, $2, $1, $2, $5, $4 == 0 ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase)"
+        confidence: low
+        notes: "RegionMatches has complex semantics; review manually."
 
+  # ============================================================
+  # Boxing types
+  # ============================================================
   - java_class: java.lang.Integer
     csharp_class: int
+    kind: class
     entries:
       - java_member: parseInt
         arg_count: 1
@@ -163,6 +436,20 @@ class_map:
         arg_count: 2
         kind: template
         expression: "Convert.ToInt32($1, $2)"
+        notes: "Java parseInt(String, radix); Convert.ToInt32 accepts a base."
+      - java_member: valueOf
+        arg_count: 2
+        kind: template
+        expression: "Convert.ToInt32($1, $2)"
+        notes: "Java valueOf(String, radix); Convert.ToInt32 accepts a base."
+      - java_member: toUnsignedString
+        arg_count: 1
+        kind: template
+        expression: "((uint)$1).ToString()"
+      - java_member: toUnsignedString
+        arg_count: 2
+        kind: template
+        expression: "Convert.ToString((uint)$1, $2)"
       - java_member: valueOf
         arg_count: 1
         type_hint: [String]
@@ -173,26 +460,111 @@ class_map:
         type_hint: [int]
         kind: template
         expression: "$1"
+      - java_member: valueOf
+        arg_count: 1
+        kind: template
+        expression: "$1"
+        notes: "Default fallback when argument type is unknown."
       - java_member: toString
         arg_count: 1
         kind: template
         expression: "$1.ToString()"
-      - java_member: toString
-        arg_count: 2
-        kind: template
-        expression: "Convert.ToString($1, $2)"
+        returns_type: java.lang.String
       - java_member: toHexString
         arg_count: 1
         kind: template
-        expression: "Convert.ToString($1, 16)"
+        expression: "$1.ToString(\"x\")"
+        returns_type: java.lang.String
       - java_member: toOctalString
         arg_count: 1
         kind: template
-        expression: "Convert.ToString($1, 8)"
+        expression: "$1.ToString(\"o\")"
+        returns_type: java.lang.String
       - java_member: toBinaryString
         arg_count: 1
         kind: template
-        expression: "Convert.ToString($1, 2)"
+        expression: "$1.ToString(\"b\")"
+        returns_type: java.lang.String
+      - java_member: bitCount
+        arg_count: 1
+        kind: template
+        expression: "System.Numerics.BitOperations.PopCount((uint)$1)"
+        confidence: medium
+        notes: "C# uses unsigned int for BitOperations.PopCount."
+      - java_member: numberOfLeadingZeros
+        arg_count: 1
+        kind: template
+        expression: "System.Numerics.BitOperations.LeadingZeroCount((uint)$1)"
+        confidence: medium
+        notes: "C# uses unsigned int for BitOperations."
+      - java_member: numberOfTrailingZeros
+        arg_count: 1
+        kind: template
+        expression: "System.Numerics.BitOperations.TrailingZeroCount((uint)$1)"
+        confidence: medium
+        notes: "C# uses unsigned int for BitOperations."
+      - java_member: highestOneBit
+        arg_count: 1
+        kind: template
+        expression: "1 << (31 - System.Numerics.BitOperations.LeadingZeroCount((uint)$1))"
+        confidence: medium
+        notes: "Approximate; behavior differs for negative values."
+      - java_member: lowestOneBit
+        arg_count: 1
+        kind: template
+        expression: "$1 & -$1"
+      - java_member: reverse
+        arg_count: 1
+        kind: template
+        expression: "System.Numerics.BitOperations.ReverseBits((uint)$1)"
+        confidence: medium
+        notes: "C# uses unsigned int."
+      - java_member: reverseBytes
+        arg_count: 1
+        kind: template
+        expression: "BinaryPrimitives.ReverseEndianness((uint)$1)"
+        confidence: medium
+      - java_member: rotateLeft
+        arg_count: 2
+        kind: template
+        expression: "($1 << $2) | ((int)((uint)$1 >> (32 - $2)))"
+      - java_member: rotateRight
+        arg_count: 2
+        kind: template
+        expression: "((int)((uint)$1 >> $2)) | ($1 << (32 - $2))"
+      - java_member: compare
+        arg_count: 2
+        kind: template
+        expression: "$1.CompareTo($2)"
+      - java_member: compareUnsigned
+        arg_count: 2
+        kind: template
+        expression: "((uint)$1).CompareTo((uint)$2)"
+      - java_member: divideUnsigned
+        arg_count: 2
+        kind: template
+        expression: "(int)((uint)$1 / (uint)$2)"
+      - java_member: remainderUnsigned
+        arg_count: 2
+        kind: template
+        expression: "(int)((uint)$1 % (uint)$2)"
+      - java_member: sum
+        arg_count: 2
+        kind: template
+        expression: "$1 + $2"
+      - java_member: max
+        arg_count: 2
+        kind: rename
+        csharp_member: Max
+      - java_member: min
+        arg_count: 2
+        kind: rename
+        csharp_member: Min
+      - java_member: decode
+        arg_count: 1
+        kind: template
+        expression: "Convert.ToInt32($1, 0)"
+        notes: "Java Integer.decode supports decimal, hex (0x), and octal (0) prefixes."
       - java_member: MAX_VALUE
         member_type: field
         kind: template
@@ -201,21 +573,24 @@ class_map:
         member_type: field
         kind: template
         expression: "int.MinValue"
-      - java_member: compare
-        arg_count: 2
+      - java_member: SIZE
+        member_type: field
         kind: template
-        expression: "$1.CompareTo($2)"
+        expression: "32"
+      - java_member: BYTES
+        member_type: field
+        kind: template
+        expression: "4"
+      - java_member: TYPE
+        member_type: field
+        kind: template
+        expression: "typeof(int)"
         confidence: medium
-        notes: "Assumes boxed int operands with CompareTo; use the <=> pattern for raw ints."
-      - java_member: reverse
-        arg_count: 1
-        kind: unsupported
-      - java_member: parseUnsignedInt
-        arg_count: 1
-        kind: unsupported
+        notes: "Java Integer.TYPE is the primitive int class; typeof(int) is the Type object."
 
   - java_class: java.lang.Long
     csharp_class: long
+    kind: class
     entries:
       - java_member: parseLong
         arg_count: 1
@@ -225,6 +600,20 @@ class_map:
         arg_count: 2
         kind: template
         expression: "Convert.ToInt64($1, $2)"
+        notes: "Java parseLong(String, radix); Convert.ToInt64 accepts a base."
+      - java_member: valueOf
+        arg_count: 2
+        kind: template
+        expression: "Convert.ToInt64($1, $2)"
+        notes: "Java valueOf(String, radix); Convert.ToInt64 accepts a base."
+      - java_member: toUnsignedString
+        arg_count: 1
+        kind: template
+        expression: "((ulong)$1).ToString()"
+      - java_member: toUnsignedString
+        arg_count: 2
+        kind: template
+        expression: "Convert.ToString((ulong)$1, $2)"
       - java_member: valueOf
         arg_count: 1
         type_hint: [String]
@@ -235,18 +624,33 @@ class_map:
         type_hint: [long]
         kind: template
         expression: "$1"
+      - java_member: valueOf
+        arg_count: 1
+        kind: template
+        expression: "$1"
       - java_member: toString
         arg_count: 1
         kind: template
         expression: "$1.ToString()"
-      - java_member: toString
-        arg_count: 2
-        kind: template
-        expression: "Convert.ToString($1, $2)"
+        returns_type: java.lang.String
       - java_member: toHexString
         arg_count: 1
         kind: template
-        expression: "Convert.ToString($1, 16)"
+        expression: "$1.ToString(\"x\")"
+        returns_type: java.lang.String
+      - java_member: compare
+        arg_count: 2
+        kind: template
+        expression: "$1.CompareTo($2)"
+      - java_member: toBinaryString
+        arg_count: 1
+        kind: template
+        expression: "Convert.ToString($1, 2)"
+        returns_type: java.lang.String
+      - java_member: sum
+        arg_count: 2
+        kind: template
+        expression: "$1 + $2"
       - java_member: MAX_VALUE
         member_type: field
         kind: template
@@ -255,9 +659,22 @@ class_map:
         member_type: field
         kind: template
         expression: "long.MinValue"
+      - java_member: SIZE
+        member_type: field
+        kind: template
+        expression: "64"
+      - java_member: BYTES
+        member_type: field
+        kind: template
+        expression: "8"
+      - java_member: TYPE
+        member_type: field
+        kind: template
+        expression: "typeof(long)"
 
   - java_class: java.lang.Double
     csharp_class: double
+    kind: class
     entries:
       - java_member: parseDouble
         arg_count: 1
@@ -267,6 +684,31 @@ class_map:
         arg_count: 1
         kind: template
         expression: "double.Parse($1)"
+        confidence: medium
+        notes: "Default overload; use type_hint to distinguish overloads."
+      - java_member: toString
+        arg_count: 1
+        kind: template
+        expression: "$1.ToString()"
+        returns_type: java.lang.String
+      - java_member: compare
+        arg_count: 2
+        kind: template
+        expression: "$1.CompareTo($2)"
+        confidence: medium
+        notes: "Java Double.compare orders NaN differently from C# CompareTo."
+      - java_member: min
+        arg_count: 2
+        kind: template
+        expression: "Math.Min($1, $2)"
+      - java_member: max
+        arg_count: 2
+        kind: template
+        expression: "Math.Max($1, $2)"
+      - java_member: sum
+        arg_count: 2
+        kind: template
+        expression: "$1 + $2"
       - java_member: isNaN
         arg_count: 1
         kind: template
@@ -275,10 +717,24 @@ class_map:
         arg_count: 1
         kind: template
         expression: "double.IsInfinity($1)"
-      - java_member: toString
+      - java_member: isFinite
         arg_count: 1
         kind: template
-        expression: "$1.ToString()"
+        expression: "!double.IsInfinity($1) && !double.IsNaN($1)"
+      - java_member: doubleToLongBits
+        arg_count: 1
+        kind: template
+        expression: "BitConverter.DoubleToInt64Bits($1)"
+      - java_member: doubleToRawLongBits
+        arg_count: 1
+        kind: template
+        expression: "BitConverter.DoubleToInt64Bits($1)"
+        confidence: medium
+        notes: "Java differentiates doubleToLongBits and doubleToRawLongBits for NaN; C# does not."
+      - java_member: longBitsToDouble
+        arg_count: 1
+        kind: template
+        expression: "BitConverter.Int64BitsToDouble($1)"
       - java_member: MAX_VALUE
         member_type: field
         kind: template
@@ -299,15 +755,14 @@ class_map:
         member_type: field
         kind: template
         expression: "double.NaN"
-      - java_member: compare
-        arg_count: 2
+      - java_member: TYPE
+        member_type: field
         kind: template
-        expression: "$1.CompareTo($2)"
-        confidence: medium
-        notes: "double.CompareTo differs from Java's Double.compare for NaN/0.0; review."
+        expression: "typeof(double)"
 
   - java_class: java.lang.Float
     csharp_class: float
+    kind: class
     entries:
       - java_member: parseFloat
         arg_count: 1
@@ -317,6 +772,31 @@ class_map:
         arg_count: 1
         kind: template
         expression: "float.Parse($1)"
+        confidence: medium
+        notes: "Default overload; use type_hint to distinguish overloads."
+      - java_member: toString
+        arg_count: 1
+        kind: template
+        expression: "$1.ToString()"
+        returns_type: java.lang.String
+      - java_member: compare
+        arg_count: 2
+        kind: template
+        expression: "$1.CompareTo($2)"
+        confidence: medium
+        notes: "Java Float.compare orders NaN differently from C# CompareTo."
+      - java_member: min
+        arg_count: 2
+        kind: template
+        expression: "Math.Min($1, $2)"
+      - java_member: max
+        arg_count: 2
+        kind: template
+        expression: "Math.Max($1, $2)"
+      - java_member: sum
+        arg_count: 2
+        kind: template
+        expression: "$1 + $2"
       - java_member: isNaN
         arg_count: 1
         kind: template
@@ -325,10 +805,6 @@ class_map:
         arg_count: 1
         kind: template
         expression: "float.IsInfinity($1)"
-      - java_member: toString
-        arg_count: 1
-        kind: template
-        expression: "$1.ToString()"
       - java_member: MAX_VALUE
         member_type: field
         kind: template
@@ -349,9 +825,14 @@ class_map:
         member_type: field
         kind: template
         expression: "float.NaN"
+      - java_member: TYPE
+        member_type: field
+        kind: template
+        expression: "typeof(float)"
 
   - java_class: java.lang.Short
     csharp_class: short
+    kind: class
     entries:
       - java_member: parseShort
         arg_count: 1
@@ -365,6 +846,10 @@ class_map:
         arg_count: 1
         kind: template
         expression: "$1.ToString()"
+      - java_member: compare
+        arg_count: 2
+        kind: template
+        expression: "$1.CompareTo($2)"
       - java_member: MAX_VALUE
         member_type: field
         kind: template
@@ -373,9 +858,18 @@ class_map:
         member_type: field
         kind: template
         expression: "short.MinValue"
+      - java_member: SIZE
+        member_type: field
+        kind: template
+        expression: "16"
+      - java_member: TYPE
+        member_type: field
+        kind: template
+        expression: "typeof(short)"
 
   - java_class: java.lang.Byte
     csharp_class: byte
+    kind: class
     entries:
       - java_member: parseByte
         arg_count: 1
@@ -389,6 +883,10 @@ class_map:
         arg_count: 1
         kind: template
         expression: "$1.ToString()"
+      - java_member: compare
+        arg_count: 2
+        kind: template
+        expression: "$1.CompareTo($2)"
       - java_member: MAX_VALUE
         member_type: field
         kind: template
@@ -397,9 +895,18 @@ class_map:
         member_type: field
         kind: template
         expression: "byte.MinValue"
+      - java_member: SIZE
+        member_type: field
+        kind: template
+        expression: "8"
+      - java_member: TYPE
+        member_type: field
+        kind: template
+        expression: "typeof(byte)"
 
   - java_class: java.lang.Boolean
     csharp_class: bool
+    kind: class
     entries:
       - java_member: parseBoolean
         arg_count: 1
@@ -413,9 +920,38 @@ class_map:
         arg_count: 1
         kind: template
         expression: "$1.ToString()"
+      - java_member: compare
+        arg_count: 2
+        kind: template
+        expression: "$1.CompareTo($2)"
+      - java_member: logicalAnd
+        arg_count: 2
+        kind: template
+        expression: "$1 && $2"
+      - java_member: logicalOr
+        arg_count: 2
+        kind: template
+        expression: "$1 || $2"
+      - java_member: logicalXor
+        arg_count: 2
+        kind: template
+        expression: "$1 ^ $2"
+      - java_member: TRUE
+        member_type: field
+        kind: template
+        expression: "true"
+      - java_member: FALSE
+        member_type: field
+        kind: template
+        expression: "false"
+      - java_member: TYPE
+        member_type: field
+        kind: template
+        expression: "typeof(bool)"
 
   - java_class: java.lang.Character
     csharp_class: char
+    kind: class
     entries:
       - java_member: isDigit
         arg_count: 1
@@ -441,6 +977,22 @@ class_map:
         arg_count: 1
         kind: template
         expression: "char.IsWhiteSpace($1)"
+      - java_member: isAlphabetic
+        arg_count: 1
+        kind: template
+        expression: "char.IsLetter($1)"
+        confidence: medium
+        notes: "Java isAlphabetic also returns true for some Unicode categories char.IsLetter misses."
+      - java_member: isSurrogatePair
+        arg_count: 2
+        kind: template
+        expression: "char.IsSurrogatePair($1, $2)"
+      - java_member: isSpaceChar
+        arg_count: 1
+        kind: template
+        expression: "char.IsWhiteSpace($1)"
+        confidence: medium
+        notes: "Java isSpaceChar includes only Unicode space characters; char.IsWhiteSpace includes more."
       - java_member: toUpperCase
         arg_count: 1
         kind: template
@@ -449,242 +1001,125 @@ class_map:
         arg_count: 1
         kind: template
         expression: "char.ToLower($1)"
-      - java_member: isSpaceChar
-        arg_count: 1
-        kind: unsupported
-      - java_member: digit
+      - java_member: compare
         arg_count: 2
-        kind: unsupported
-      - java_member: MAX_VALUE
-        member_type: field
         kind: template
-        expression: "char.MaxValue"
+        expression: "$1.CompareTo($2)"
       - java_member: MIN_VALUE
         member_type: field
         kind: template
         expression: "char.MinValue"
-      - java_member: toString
-        arg_count: 1
+      - java_member: MAX_VALUE
+        member_type: field
         kind: template
-        expression: "$1.ToString()"
+        expression: "char.MaxValue"
 
-  - java_class: java.lang.String
-    csharp_class: String
-    entries:
-      - java_member: length
-        arg_count: 0
-        kind: property
-        csharp_member: Length
-      - java_member: isEmpty
-        arg_count: 0
-        kind: template
-        expression: "string.IsNullOrEmpty($0)"
-      - java_member: isBlank
-        arg_count: 0
-        kind: template
-        expression: "string.IsNullOrWhiteSpace($0)"
-      - java_member: charAt
-        arg_count: 1
-        kind: template
-        expression: "$0[$1]"
-      - java_member: substring
-        arg_count: 1
-        kind: template
-        expression: "$0.Substring($1)"
-      - java_member: substring
-        arg_count: 2
-        kind: template
-        expression: "$0.Substring($1, $2 - $1)"
-        notes: "Java's endIndex becomes a C# length."
-      - java_member: indexOf
-        arg_count: 1
-        kind: rename
-        csharp_member: IndexOf
-      - java_member: indexOf
-        arg_count: 2
-        kind: rename
-        csharp_member: IndexOf
-      - java_member: lastIndexOf
-        arg_count: 1
-        kind: rename
-        csharp_member: LastIndexOf
-      - java_member: lastIndexOf
-        arg_count: 2
-        kind: rename
-        csharp_member: LastIndexOf
-      - java_member: toLowerCase
-        arg_count: 0
-        kind: rename
-        csharp_member: ToLowerInvariant
-      - java_member: toUpperCase
-        arg_count: 0
-        kind: rename
-        csharp_member: ToUpperInvariant
-      - java_member: trim
-        arg_count: 0
-        kind: rename
-        csharp_member: Trim
-      - java_member: strip
-        arg_count: 0
-        kind: template
-        expression: "$0.Trim()"
-        confidence: medium
-        notes: "Java strip() removes Unicode whitespace; C# Trim() removes fewer characters. Review."
-      - java_member: replace
-        arg_count: 2
-        kind: rename
-        csharp_member: Replace
-      - java_member: replaceAll
-        arg_count: 2
-        kind: template
-        expression: "System.Text.RegularExpressions.Regex.Replace($0, $1, $2)"
-        confidence: medium
-        notes: "Java and .NET regex syntaxes differ slightly; review the pattern."
-      - java_member: split
-        arg_count: 1
-        kind: template
-        expression: "Regex.Split($0, $1)"
-        confidence: medium
-        notes: "Java split() takes a regex pattern; C#'s Regex.Split works the same way."
-      - java_member: split
-        arg_count: 2
-        kind: template
-        expression: "Regex.Split($0, $1)"
-        confidence: medium
-        notes: "Java split(regex, limit) truncates results; C# Regex.Split does not. Review."
-      - java_member: contains
-        arg_count: 1
-        kind: rename
-        csharp_member: Contains
-      - java_member: startsWith
-        arg_count: 1
-        kind: rename
-        csharp_member: StartsWith
-      - java_member: endsWith
-        arg_count: 1
-        kind: rename
-        csharp_member: EndsWith
-      - java_member: equals
-        arg_count: 1
-        kind: rename
-        csharp_member: Equals
-      - java_member: equalsIgnoreCase
-        arg_count: 1
-        kind: template
-        expression: "$0.Equals($1, StringComparison.OrdinalIgnoreCase)"
-      - java_member: compareTo
-        arg_count: 1
-        kind: template
-        expression: "string.Compare($0, $1)"
-        notes: "Static string.Compare is more idiomatic in C# than instance CompareTo."
-      - java_member: compareToIgnoreCase
-        arg_count: 1
-        kind: template
-        expression: "string.Compare($0, $1, StringComparison.OrdinalIgnoreCase)"
-      - java_member: concat
-        arg_count: 1
-        kind: rename
-        csharp_member: Concat
-      - java_member: valueOf
-        arg_count: 1
-        kind: template
-        expression: "Convert.ToString($1)"
-        confidence: medium
-        notes: "Java valueOf(null) yields 'null'; Convert.ToString(null) yields ''."
-      - java_member: join
-        arg_count: variadic
-        kind: rename
-        csharp_member: Join
-      - java_member: format
-        arg_count: 1
-        kind: unsupported
-        notes: "Java's format specifiers (%d, %s) differ from C#'s ({0}). Rewrite as string.Format or interpolation."
-      - java_member: format
-        arg_count: 2
-        kind: unsupported
-        notes: "Java's format specifiers (%d, %s) differ from C#'s ({0}). Rewrite as string.Format or interpolation."
-      - java_member: intern
-        arg_count: 0
-        kind: unsupported
-        notes: "No safe C# equivalent for string interning via this API."
-      - java_member: hashCode
-        arg_count: 0
-        kind: rename
-        csharp_member: GetHashCode
-      - java_member: getBytes
-        arg_count: 0
-        kind: unsupported
-        notes: "Use System.Text.Encoding.UTF8.GetBytes($0)."
-      - java_member: toCharArray
-        arg_count: 0
-        kind: unsupported
-        notes: "Use $0.ToCharArray()."
-
+  # ============================================================
+  # java.lang.Object (pure rename, no entries needed)
+  # ============================================================
   - java_class: java.lang.Object
     csharp_class: object
+    kind: class
+
+  # ============================================================
+  # java.lang.Throwable (pure rename)
+  # ============================================================
+  - java_class: java.lang.Throwable
+    csharp_class: Exception
+    kind: class
     entries:
       - java_member: toString
         arg_count: 0
         kind: rename
         csharp_member: ToString
-      - java_member: hashCode
-        arg_count: 0
-        kind: rename
-        csharp_member: GetHashCode
-      - java_member: equals
-        arg_count: 1
-        kind: rename
-        csharp_member: Equals
-      - java_member: getClass
-        arg_count: 0
-        kind: rename
-        csharp_member: GetType
-      - java_member: clone
-        arg_count: 0
-        kind: unsupported
-      - java_member: wait
-        arg_count: 0
-        kind: unsupported
-        notes: "Use System.Threading.Monitor.Wait($0) or SemaphoreSlim."
-      - java_member: wait
-        arg_count: 1
-        kind: unsupported
-        notes: "Use System.Threading.Monitor.Wait($0, $1) or SemaphoreSlim.Wait."
-      - java_member: notify
-        arg_count: 0
-        kind: unsupported
-        notes: "Use System.Threading.Monitor.Pulse($0) or SemaphoreSlim.Release."
-      - java_member: notifyAll
-        arg_count: 0
-        kind: unsupported
-        notes: "Use System.Threading.Monitor.PulseAll($0)."
-      - java_member: finalize
-        arg_count: 0
-        kind: unsupported
-        notes: "Implement IDisposable instead of finalizers."
-
-  - java_class: java.lang.Throwable
-    csharp_class: Exception
-    kind: exception
-    entries:
+        returns_type: java.lang.String
       - java_member: getMessage
         arg_count: 0
         kind: property
         csharp_member: Message
-      - java_member: toString
-        arg_count: 0
-        kind: rename
-        csharp_member: ToString
+        returns_type: java.lang.String
+
+  # ============================================================
+  # Exceptions
+  # ============================================================
+  - java_class: java.lang.NumberFormatException
+    csharp_class: FormatException
+    kind: exception
+
+  - java_class: java.lang.IllegalArgumentException
+    csharp_class: ArgumentException
+    kind: exception
+
+  - java_class: java.lang.IllegalStateException
+    csharp_class: InvalidOperationException
+    kind: exception
+
+  - java_class: java.lang.NullPointerException
+    csharp_class: NullReferenceException
+    kind: exception
+
+  - java_class: java.lang.ClassCastException
+    csharp_class: InvalidCastException
+    kind: exception
+
+  - java_class: java.lang.IndexOutOfBoundsException
+    csharp_class: ArgumentOutOfRangeException
+    kind: exception
+
+  - java_class: java.lang.ArrayIndexOutOfBoundsException
+    csharp_class: IndexOutOfRangeException
+    kind: exception
+
+  - java_class: java.lang.UnsupportedOperationException
+    csharp_class: NotSupportedException
+    kind: exception
+
+  - java_class: java.lang.ConcurrentModificationException
+    csharp_class: InvalidOperationException
+    kind: exception
+
+  - java_class: java.lang.ArithmeticException
+    csharp_class: DivideByZeroException
+    kind: exception
+    confidence: medium
+    notes: "Java ArithmeticException covers more cases than C# DivideByZeroException (e.g. overflow)."
+
+  - java_class: java.lang.StackOverflowError
+    csharp_class: StackOverflowException
+    kind: exception
+    confidence: medium
+    notes: "Java StackOverflowError is an Error, not an Exception; C# StackOverflowException is a fatal Exception."
+
+  - java_class: java.lang.OutOfMemoryError
+    csharp_class: OutOfMemoryException
+    kind: exception
+    confidence: medium
+    notes: "Java OutOfMemoryError is an Error; C# OutOfMemoryException is an Exception."
 
   - java_class: java.lang.RuntimeException
     csharp_class: Exception
     kind: exception
-    entries:
-      - java_member: getMessage
-        arg_count: 0
-        kind: property
-        csharp_member: Message
 
-  - java_class: java.lang.NumberFormatException
-    csharp_class: FormatException
+  - java_class: java.lang.Exception
+    csharp_class: Exception
     kind: exception
+
+  - java_class: java.lang.Error
+    csharp_class: Exception
+    kind: exception
+    confidence: medium
+    notes: "Java Errors are serious problems; mapped to Exception since C# has no direct equivalent hierarchy."
+
+  - java_class: java.lang.Iterable
+    csharp_class: IEnumerable
+    kind: interface
+    generic: true
+
+  - java_class: java.lang.Comparable
+    csharp_class: IComparable
+    kind: interface
+    generic: true
+
+  - java_class: java.lang.AutoCloseable
+    csharp_class: IDisposable
+    kind: interface

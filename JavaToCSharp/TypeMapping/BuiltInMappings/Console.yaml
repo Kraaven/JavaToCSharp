@@ -1,9 +1,3 @@
-# Built-in mapping spec: java.lang.System (console I/O) -> System.Console
-#
-# The nested routing nodes for System.out/System.err are registered as
-# java.lang.System.Out / java.lang.System.Err (instead of java.io.PrintStream)
-# so this spec only needs the java.lang -> System namespace row and therefore
-# composes cleanly with the System.IO built-in spec.
 namespaces:
   - java_packages: [java.lang]
     csharp_packages: [System]
@@ -12,6 +6,7 @@ class_map:
   - java_class: java.lang.System
     csharp_class: Console
     entries:
+      # System.out.println("x") → Console.WriteLine("x")
       - java_member: out
         member_type: field
         kind: rename
@@ -30,71 +25,143 @@ class_map:
               - java_member: printf
                 arg_count: variadic
                 kind: template
-                expression: "$0.Write($1, $rest)"
-                confidence: medium
-                notes: "Java's printf format specifiers (%d, %s) differ from C#'s ({0}); review the format string."
+                expression: "string.Format($1, $rest)"
+
+      # System.err.println("x") → Console.Error.WriteLine("x")
       - java_member: err
         member_type: field
         kind: rename
         class_map:
           - java_class: java.lang.System.Err
-            csharp_class: Console
+            csharp_class: Error
             entries:
               - java_member: println
                 arg_count: variadic
-                kind: template
-                expression: "$0.Error.WriteLine($rest)"
+                kind: rename
+                csharp_member: WriteLine
               - java_member: print
                 arg_count: variadic
-                kind: template
-                expression: "$0.Error.Write($rest)"
+                kind: rename
+                csharp_member: Write
               - java_member: printf
                 arg_count: variadic
                 kind: template
-                expression: "$0.Error.Write($1, $rest)"
-                confidence: medium
-                notes: "Java's printf format specifiers (%d, %s) differ from C#'s ({0}); review the format string."
+                expression: "string.Format($1, $rest)"
+
+      # System.in → Console.In
       - java_member: in
         member_type: field
-        kind: rename
+        kind: property
         csharp_member: In
+
+      # System.currentTimeMillis() → DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
       - java_member: currentTimeMillis
         arg_count: 0
         kind: template
         expression: "DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()"
+
+      # System.nanoTime() → Stopwatch.GetTimestamp() (approximate)
       - java_member: nanoTime
         arg_count: 0
-        kind: unsupported
-        notes: "Use System.Diagnostics.Stopwatch.GetTimestamp() (add using System.Diagnostics). Timestamps are not directly comparable to DateTime."
-      - java_member: gc
-        arg_count: 0
         kind: template
-        expression: "GC.Collect()"
+        expression: "Stopwatch.GetTimestamp()"
+        confidence: medium
+        notes: "Stopwatch.GetTimestamp() has different precision and epoch than System.nanoTime()."
+
+      # System.exit(code) → Environment.Exit(code)
       - java_member: exit
         arg_count: 1
         kind: template
         expression: "Environment.Exit($1)"
+
+      # System.gc() — no safe C# equivalent
+      - java_member: gc
+        arg_count: 0
+        kind: unsupported
+        notes: "No safe C# equivalent for explicit garbage collection."
+
+      # System.arraycopy(src, srcPos, dest, destPos, length) → Array.Copy(src, srcPos, dest, destPos, length)
       - java_member: arraycopy
         arg_count: 5
         kind: template
         expression: "Array.Copy($1, $2, $3, $4, $5)"
-      - java_member: getenv
-        arg_count: 1
-        kind: template
-        expression: "Environment.GetEnvironmentVariable($1)"
-      - java_member: lineSeparator
-        arg_count: 0
-        kind: template
-        expression: "Environment.NewLine"
-      - java_member: getProperty
-        arg_count: 1
-        kind: unsupported
-        notes: "Java system properties have no direct C# equivalent. Use Environment.GetEnvironmentVariable for OS environment variables."
-      - java_member: setProperty
-        arg_count: 2
-        kind: unsupported
-        notes: "Java system properties have no direct C# equivalent. Use Environment.SetEnvironmentVariable for OS environment variables."
+
+      # System.identityHashCode(obj) → RuntimeHelpers.GetHashCode(obj)
       - java_member: identityHashCode
         arg_count: 1
         kind: template
         expression: "System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode($1)"
+
+      # System.getenv(name) → Environment.GetEnvironmentVariable(name)
+      - java_member: getenv
+        arg_count: 1
+        kind: template
+        expression: "Environment.GetEnvironmentVariable($1)"
+      - java_member: getenv
+        arg_count: 0
+        kind: template
+        expression: "Environment.GetEnvironmentVariables()"
+
+      # System.lineSeparator() → Environment.NewLine
+      - java_member: lineSeparator
+        arg_count: 0
+        kind: template
+        expression: "Environment.NewLine"
+
+      # System.getProperty(name) → Environment.GetEnvironmentVariable(name)
+      - java_member: getProperty
+        arg_count: 1
+        kind: template
+        expression: "Environment.GetEnvironmentVariable($1)"
+        confidence: medium
+        notes: "Java system properties and environment variables are different concepts; review carefully."
+      - java_member: getProperty
+        arg_count: 2
+        kind: template
+        expression: "Environment.GetEnvironmentVariable($1) ?? $2"
+        confidence: medium
+        notes: "Java system properties and environment variables are different concepts; review carefully."
+      - java_member: getProperties
+        arg_count: 0
+        kind: template
+        expression: "Environment.GetEnvironmentVariables()"
+        confidence: low
+        notes: "Java System.getProperties returns all JVM properties; C# returns environment variables."
+      - java_member: setProperty
+        arg_count: 2
+        kind: template
+        expression: "Environment.SetEnvironmentVariable($1, $2)"
+        confidence: low
+        notes: "Java system properties and environment variables are different concepts; review carefully."
+      - java_member: clearProperty
+        arg_count: 1
+        kind: template
+        expression: "Environment.SetEnvironmentVariable($1, null)"
+        confidence: low
+        notes: "Java returns the previous value; C# SetEnvironmentVariable returns void."
+      - java_member: console
+        arg_count: 0
+        kind: unsupported
+        notes: "No direct C# equivalent for Java's Console."
+      - java_member: load
+        arg_count: 1
+        kind: unsupported
+        notes: "Use P/Invoke or NativeLibrary.Load instead."
+      - java_member: loadLibrary
+        arg_count: 1
+        kind: unsupported
+        notes: "Use P/Invoke or NativeLibrary.Load instead."
+      - java_member: mapLibraryName
+        arg_count: 1
+        kind: unsupported
+        notes: "No direct C# equivalent."
+      - java_member: halt
+        arg_count: 1
+        kind: template
+        expression: "Environment.Exit($1)"
+        confidence: medium
+        notes: "Java halt() does not run shutdown hooks; C# Environment.Exit runs finally blocks."
+      - java_member: runFinalization
+        arg_count: 0
+        kind: unsupported
+        notes: "No safe C# equivalent; use IDisposable patterns instead."

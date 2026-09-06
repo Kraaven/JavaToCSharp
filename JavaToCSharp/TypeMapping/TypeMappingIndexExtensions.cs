@@ -36,12 +36,13 @@ public static class TypeMappingIndexExtensions
             {
                 c.SetGeneric(cls.IsGeneric);
                 c.SetKind(cls.Kind);
+                c.SetMatchQualifiedOnly(cls.MatchQualifiedOnly);
 
                 foreach (var entry in cls.Entries)
                 {
                     CopyMemberEntry(c, entry);
                 }
-            }, cls.IsGeneric, cls.Kind);
+            }, cls.IsGeneric, cls.Kind, cls.MatchQualifiedOnly);
         }
 
         return builder;
@@ -104,12 +105,13 @@ public static class TypeMappingIndexExtensions
                     {
                         nc.SetGeneric(nestedCls.IsGeneric);
                         nc.SetKind(nestedCls.Kind);
+                        nc.SetMatchQualifiedOnly(nestedCls.MatchQualifiedOnly);
 
                         foreach (var nestedEntry in nestedCls.Entries)
                         {
                             CopyMemberEntry(nc, nestedEntry);
                         }
-                    }, nestedCls.IsGeneric, nestedCls.Kind);
+                    }, nestedCls.IsGeneric, nestedCls.Kind, nestedCls.MatchQualifiedOnly);
                 }
             });
         }

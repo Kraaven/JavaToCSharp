@@ -17,15 +17,18 @@ public sealed partial class TypeMappingIndex
     private readonly IReadOnlyDictionary<string, ClassMapping> _byQualifiedName;
     private readonly IReadOnlyDictionary<string, IReadOnlyList<ClassMapping>> _bySimpleName;
     private readonly IReadOnlyDictionary<string, string[]> _csharpPackagesByPackage;
+    private readonly IReadOnlyDictionary<string, IReadOnlyList<MemberMapping>> _byMemberName;
 
     private TypeMappingIndex(
         IReadOnlyDictionary<string, ClassMapping> byQualifiedName,
         IReadOnlyDictionary<string, IReadOnlyList<ClassMapping>> bySimpleName,
-        IReadOnlyDictionary<string, string[]> csharpPackagesByPackage)
+        IReadOnlyDictionary<string, string[]> csharpPackagesByPackage,
+        IReadOnlyDictionary<string, IReadOnlyList<MemberMapping>> byMemberName)
     {
         _byQualifiedName = byQualifiedName;
         _bySimpleName = bySimpleName;
         _csharpPackagesByPackage = csharpPackagesByPackage;
+        _byMemberName = byMemberName;
     }
 
     /// <summary>All class mappings (roots and nested) registered in the mapping set.</summary>
@@ -121,6 +124,13 @@ public sealed partial class TypeMappingIndex
         var bySimpleName = new Dictionary<string, List<ClassMapping>>(StringComparer.Ordinal);
         foreach (var cls in byQualifiedName.Values)
         {
+            // match_qualified_only classes are reachable only by their fully qualified name;
+            // excluding them here prevents their simple name from hijacking unrelated types.
+            if (cls.MatchQualifiedOnly)
+            {
+                continue;
+            }
+
             if (!bySimpleName.TryGetValue(cls.SimpleName, out var list))
             {
                 list = [];
@@ -130,10 +140,31 @@ public sealed partial class TypeMappingIndex
             list.Add(cls);
         }
 
+        // Build reverse member index: member name → list of member mappings across all classes.
+        // Used by heuristic type inference to resolve unknown receivers by their method usage.
+        var byMemberName = new Dictionary<string, List<MemberMapping>>(StringComparer.Ordinal);
+        foreach (var cls in byQualifiedName.Values)
+        {
+            foreach (var entry in cls.Entries)
+            {
+                if (entry.Kind == MemberMappingKind.Unsupported)
+                    continue;
+
+                if (!byMemberName.TryGetValue(entry.JavaMember, out var list))
+                {
+                    list = [];
+                    byMemberName[entry.JavaMember] = list;
+                }
+
+                list.Add(entry);
+            }
+        }
+
         return new TypeMappingIndex(
             byQualifiedName,
             bySimpleName.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<ClassMapping>)kv.Value.AsReadOnly(), StringComparer.Ordinal),
-            new Dictionary<string, string[]>(csharpPackagesByPackage, StringComparer.Ordinal));
+            new Dictionary<string, string[]>(csharpPackagesByPackage, StringComparer.Ordinal),
+            byMemberName.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<MemberMapping>)kv.Value.AsReadOnly(), StringComparer.Ordinal));
     }
 
     public bool TryGetByQualifiedName(string javaClassName, out ClassMapping? cls)
@@ -220,6 +251,39 @@ public sealed partial class TypeMappingIndex
         return TryGetByQualifiedName(qualified, out cls);
     }
 
+    /// <summary>
+    /// Finds all classes in the mapping index that have a member with the given name.
+    /// Used by heuristic type inference to determine the type of an unknown receiver
+    /// based on the methods called on it. When <paramref name="activeJavaPackages"/> is
+    /// provided, results are filtered to only include classes from active (imported) packages.
+    /// </summary>
+    public IReadOnlyList<MemberMapping> FindClassesByMember(string memberName, IReadOnlySet<string>? activeJavaPackages = null)
+    {
+        if (!_byMemberName.TryGetValue(memberName, out var candidates))
+        {
+            return [];
+        }
+
+        if (activeJavaPackages is null)
+        {
+            return candidates;
+        }
+
+        return candidates
+            .Where(m =>
+            {
+                var pkg = PackageOf(m.OwnerClass);
+                return pkg.Length == 0 || activeJavaPackages.Contains(pkg);
+            })
+            .ToList();
+    }
+
+    private static string PackageOf(string javaClass)
+    {
+        var lastDot = javaClass.LastIndexOf('.');
+        return lastDot < 0 ? "" : javaClass[..lastDot];
+    }
+
     private static void RegisterNamespaces(
         Dictionary<string, string[]> byPackage,
         string sourceName,
@@ -297,6 +361,7 @@ public sealed partial class TypeMappingIndex
                 CSharpClass = dto.CSharpClass,
                 IsGeneric = dto.Generic ?? false,
                 Kind = kind,
+                MatchQualifiedOnly = dto.MatchQualifiedOnly ?? false,
             };
             classes.Add(dto.JavaClass, cls);
         }
@@ -325,16 +390,23 @@ public sealed partial class TypeMappingIndex
         MemberMappingDto dto,
         string entryPath)
     {
+        var memberType = ParseMemberType(sourceName, entryPath, dto.MemberType);
         var javaMember = dto.JavaMember;
-        var path = $"{entryPath} '{javaMember}'";
 
-        if (string.IsNullOrWhiteSpace(javaMember) || !IsValidIdentifier(javaMember))
+        // For constructors, default java_member to "<init>"
+        if (memberType == MemberMappingType.Constructor)
         {
-            throw new MappingValidationException(
-                $"Mapping file '{sourceName}' is invalid: {path} requires a valid 'java_member' (a simple Java member name).");
+            javaMember = string.IsNullOrWhiteSpace(javaMember) ? "<init>" : javaMember.Trim();
         }
 
-        var memberType = ParseMemberType(sourceName, path, dto.MemberType);
+        var path = $"{entryPath} '{javaMember}'";
+
+        if (string.IsNullOrWhiteSpace(javaMember) || (!IsValidIdentifier(javaMember) && javaMember != "<init>"))
+        {
+            throw new MappingValidationException(
+                $"Mapping file '{sourceName}' is invalid: {path} requires a valid 'java_member' (a simple Java member name or '<init>' for constructors).");
+        }
+
         var kind = ParseMemberKind(sourceName, path, dto.Kind);
         var (argCount, isVariadic) = ParseArgCount(sourceName, path, dto.ArgCount, memberType, kind);
         var confidence = ParseConfidence(sourceName, path, dto.Confidence);
@@ -386,7 +458,8 @@ public sealed partial class TypeMappingIndex
             typeHint,
             confidence,
             dto.Notes,
-            nestedClassNames);
+            nestedClassNames,
+            dto.ReturnsType);
     }
 
     private static MemberMappingType ParseMemberType(string sourceName, string path, string? raw)
@@ -400,8 +473,9 @@ public sealed partial class TypeMappingIndex
         {
             "method" => MemberMappingType.Method,
             "field" => MemberMappingType.Field,
+            "constructor" => MemberMappingType.Constructor,
             _ => throw new MappingValidationException(
-                $"Mapping file '{sourceName}' is invalid: {path} has invalid member_type '{raw}'. Allowed: method, field."),
+                $"Mapping file '{sourceName}' is invalid: {path} has invalid member_type '{raw}'. Allowed: method, field, constructor."),
         };
     }
 
@@ -557,7 +631,8 @@ public sealed partial class TypeMappingIndex
                 member.TypeHint,
                 member.Confidence,
                 member.Notes,
-                nested));
+                nested,
+                member.ReturnsType));
         }
 
         var result = new ClassMapping(
@@ -566,6 +641,7 @@ public sealed partial class TypeMappingIndex
             cls.CSharpClass,
             cls.IsGeneric,
             cls.Kind,
+            cls.MatchQualifiedOnly,
             members.AsReadOnly());
 
         cache[name] = result;
@@ -593,6 +669,8 @@ public sealed partial class TypeMappingIndex
 
         public ClassMappingKind Kind { get; init; }
 
+        public bool MatchQualifiedOnly { get; init; }
+
         public List<PendingMember> PendingMembers { get; } = [];
     }
 
@@ -611,7 +689,8 @@ public sealed partial class TypeMappingIndex
             IReadOnlyList<string>? typeHint,
             MappingConfidence confidence,
             string? notes,
-            List<string> nestedClassNames)
+            List<string> nestedClassNames,
+            string? returnsType)
         {
             SourceFile = sourceFile;
             OwnerClass = ownerClass;
@@ -626,6 +705,7 @@ public sealed partial class TypeMappingIndex
             Confidence = confidence;
             Notes = notes;
             NestedClassNames = nestedClassNames;
+            ReturnsType = returnsType;
         }
 
         public string SourceFile { get; }
@@ -653,6 +733,8 @@ public sealed partial class TypeMappingIndex
         public string? Notes { get; }
 
         public List<string> NestedClassNames { get; }
+
+        public string? ReturnsType { get; }
 
         public string ArgCountText =>
             MemberType == MemberMappingType.Field ? "n/a"

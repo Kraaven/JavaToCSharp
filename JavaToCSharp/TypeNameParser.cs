@@ -128,15 +128,25 @@ public static partial class TypeNameParser
             // TypeArgument = [ "?" [ "extends" | "super" ] ] TypeName.
             if (_token.type is TokenType.QuestionMark)
             {
-                _sb.Append("TWildcardTodo");
                 NextToken();
 
                 if (_token.type is TokenType.Extends or TokenType.Super)
                 {
                     NextToken();
+                    // Skip the bound type name — it will be parsed by the next TypeName() call.
+                    // The wildcard with a bound becomes just the bound type (erasure).
+                    // e.g. "? extends Comparable" -> "Comparable"
                 }
                 else if (_token.type is TokenType.RightAngleBracket)
                 {
+                    // Bare ? before > — erasure to object
+                    _sb.Append("object");
+                    return true;
+                }
+                else
+                {
+                    // Bare ? before another type arg or end — erasure to object
+                    _sb.Append("object");
                     return true;
                 }
             }

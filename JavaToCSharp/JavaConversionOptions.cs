@@ -46,11 +46,13 @@ public class JavaConversionOptions
     /// <summary>
     /// When true (default), method and member names keep their original Java casing and no
     /// capitalization is applied. This keeps individually converted files call-compatible with
-    /// each other across files. When false, method names are PascalCased and common Java method
-    /// names (<c>equals</c>, <c>hashCode</c>, <c>toString</c>, <c>getClass</c>, …) are replaced
-    /// with their C# equivalents. Java-to-C# property/indexer rewrites (such as <c>size()</c>
-    /// to <c>Count</c> or <c>length</c> to <c>Length</c>) are no longer performed automatically;
-    /// use a member mapping set (<see cref="MappingIndex"/>) for those.
+    /// each other across files. Common Java object-method equivalents (<c>equals</c>,
+    /// <c>hashCode</c>, <c>toString</c>, <c>getClass</c>, …) are always replaced with their C#
+    /// names regardless of this flag. When false, method names are PascalCased and the same
+    /// common Java method names are replaced with their C# equivalents. Java-to-C#
+    /// property/indexer rewrites (such as <c>size()</c> to <c>Count</c> or <c>length</c> to
+    /// <c>Length</c>) are no longer performed automatically; use a member mapping set
+    /// (<see cref="MappingIndex"/>) for those.
     /// </summary>
     public bool PreserveJavaMethodNames { get; set; } = true;
 

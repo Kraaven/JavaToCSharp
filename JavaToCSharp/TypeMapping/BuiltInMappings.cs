@@ -87,6 +87,9 @@ public static class BuiltInMappings
         BuiltInMappingSpec.SystemIO => "System.IO.yaml",
         BuiltInMappingSpec.SystemThreading => "System.Threading.yaml",
         BuiltInMappingSpec.SystemText => "System.Text.yaml",
+        BuiltInMappingSpec.SystemTime => "System.Time.yaml",
+        BuiltInMappingSpec.SystemTextRegularExpressions => "System.Text.RegularExpressions.yaml",
+        BuiltInMappingSpec.SystemNumerics => "System.Numerics.yaml",
         _ => throw new ArgumentOutOfRangeException(nameof(spec), spec, "Unknown built-in mapping spec."),
     };
 }

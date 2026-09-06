@@ -1,0 +1,686 @@
+namespaces:
+  - java_packages: [java.math]
+    csharp_packages: [System.Numerics]
+
+class_map:
+  # ============================================================
+  # java.math.BigInteger
+  # ============================================================
+  - java_class: java.math.BigInteger
+    csharp_class: BigInteger
+    kind: class
+    entries:
+      - java_member: <init>
+        member_type: constructor
+        arg_count: 1
+        kind: template
+        expression: "new BigInteger($1)"
+        type_hint: ["byte[]"]
+        confidence: medium
+        notes: "Java BigInteger(byte[]) maps to C# BigInteger(byte[])."
+      - java_member: <init>
+        member_type: constructor
+        arg_count: 1
+        kind: template
+        expression: "BigInteger.Parse($1)"
+        type_hint: [String]
+        confidence: medium
+        notes: "Java BigInteger(String) maps to BigInteger.Parse."
+      - java_member: <init>
+        member_type: constructor
+        arg_count: 1
+        kind: template
+        expression: "new BigInteger($1)"
+        confidence: medium
+        notes: "Java BigInteger has both byte[] and String constructors; use BigInteger.Parse for strings."
+      - java_member: <init>
+        member_type: constructor
+        arg_count: 2
+        kind: unsupported
+        notes: "Java BigInteger(signum, byte[] magnitude) has no direct C# constructor; compute the negation manually when the sign is negative."
+      - java_member: valueOf
+        arg_count: 1
+        kind: template
+        expression: "new BigInteger($1)"
+        returns_type: java.math.BigInteger
+      - java_member: intValue
+        arg_count: 0
+        kind: template
+        expression: "(int)$0"
+      - java_member: longValue
+        arg_count: 0
+        kind: template
+        expression: "(long)$0"
+      - java_member: floatValue
+        arg_count: 0
+        kind: template
+        expression: "(float)$0"
+      - java_member: doubleValue
+        arg_count: 0
+        kind: template
+        expression: "(double)$0"
+      - java_member: byteValue
+        arg_count: 0
+        kind: template
+        expression: "(byte)$0"
+      - java_member: shortValue
+        arg_count: 0
+        kind: template
+        expression: "(short)$0"
+      - java_member: add
+        arg_count: 1
+        kind: template
+        expression: "$0 + $1"
+        returns_type: java.math.BigInteger
+      - java_member: subtract
+        arg_count: 1
+        kind: template
+        expression: "$0 - $1"
+        returns_type: java.math.BigInteger
+      - java_member: multiply
+        arg_count: 1
+        kind: template
+        expression: "$0 * $1"
+        returns_type: java.math.BigInteger
+      - java_member: divide
+        arg_count: 1
+        kind: template
+        expression: "$0 / $1"
+        returns_type: java.math.BigInteger
+      - java_member: remainder
+        arg_count: 1
+        kind: template
+        expression: "$0 % $1"
+        returns_type: java.math.BigInteger
+      - java_member: negate
+        arg_count: 0
+        kind: template
+        expression: "-$0"
+        returns_type: java.math.BigInteger
+      - java_member: abs
+        arg_count: 0
+        kind: template
+        expression: "BigInteger.Abs($0)"
+        returns_type: java.math.BigInteger
+      - java_member: pow
+        arg_count: 1
+        kind: template
+        expression: "BigInteger.Pow($0, $1)"
+        returns_type: java.math.BigInteger
+      - java_member: gcd
+        arg_count: 1
+        kind: template
+        expression: "$0.GreatestCommonDivisor($1)"
+        confidence: high
+        notes: "C# BigInteger has a built-in GreatestCommonDivisor method (NET 7+)."
+        returns_type: java.math.BigInteger
+      - java_member: mod
+        arg_count: 1
+        kind: template
+        expression: "$0 % $1"
+        confidence: medium
+        notes: "Java mod() always returns non-negative; C# % can return negative values."
+        returns_type: java.math.BigInteger
+      - java_member: sqrt
+        arg_count: 0
+        kind: template
+        expression: "$0.Sqrt()"
+        confidence: high
+        notes: "C# BigInteger has a built-in Sqrt method (NET 7+)."
+        returns_type: java.math.BigInteger
+      - java_member: sqrtAndRemainder
+        arg_count: 0
+        kind: unsupported
+        notes: "No direct C# equivalent for returning sqrt and remainder together."
+      - java_member: modPow
+        arg_count: 2
+        kind: unsupported
+        notes: "No built-in modPow in C#; implement manually."
+      - java_member: modInverse
+        arg_count: 1
+        kind: unsupported
+        notes: "No built-in modInverse in C#."
+      - java_member: isProbablePrime
+        arg_count: 1
+        kind: unsupported
+        notes: "No built-in primality test in C#."
+      - java_member: probablePrime
+        arg_count: 2
+        kind: unsupported
+        notes: "No built-in probablePrime in C#."
+      - java_member: nextProbablePrime
+        arg_count: 0
+        kind: unsupported
+        notes: "No built-in nextProbablePrime in C#."
+      - java_member: bitLength
+        arg_count: 0
+        kind: template
+        expression: "$0.GetBitLength()"
+      - java_member: bitCount
+        arg_count: 0
+        kind: template
+        expression: "System.Numerics.BitOperations.PopCount((uint)$0)"
+        confidence: low
+        notes: "Java bitCount counts set bits; C# PopCount works on unsigned int."
+      - java_member: getLowestSetBit
+        arg_count: 0
+        kind: template
+        expression: "System.Numerics.BitOperations.TrailingZeroCount((ulong)$0)"
+        confidence: low
+        notes: "C# uses unsigned long; may need manual implementation for BigInteger."
+      - java_member: signum
+        arg_count: 0
+        kind: template
+        expression: "$0.Sign"
+        confidence: medium
+        notes: "Java signum returns -1, 0, or 1; C# Sign property returns an int."
+      - java_member: compare
+        arg_count: 2
+        kind: template
+        expression: "$1.CompareTo($2)"
+      - java_member: min
+        arg_count: 2
+        kind: template
+        expression: "BigInteger.Min($1, $2)"
+        returns_type: java.math.BigInteger
+      - java_member: max
+        arg_count: 2
+        kind: template
+        expression: "BigInteger.Max($1, $2)"
+        returns_type: java.math.BigInteger
+      - java_member: toByteArray
+        arg_count: 0
+        kind: rename
+        csharp_member: ToByteArray
+      - java_member: toString
+        arg_count: 0
+        kind: rename
+        csharp_member: ToString
+        returns_type: java.lang.String
+      - java_member: toString
+        arg_count: 1
+        kind: template
+        expression: "$0.ToString($1)"
+        confidence: medium
+        notes: "Java toString(radix) accepts any radix 2-36; C# ToString supports limited radices."
+        returns_type: java.lang.String
+      - java_member: toString
+        arg_count: 2
+        kind: template
+        expression: "$0.ToString($1)"
+        confidence: medium
+        notes: "Java toString(int radix, Random rnd) — rnd is ignored."
+        returns_type: java.lang.String
+      - java_member: flipBit
+        arg_count: 1
+        kind: template
+        expression: "$0 ^ (BigInteger.One << $1)"
+        returns_type: java.math.BigInteger
+      - java_member: setBit
+        arg_count: 1
+        kind: template
+        expression: "$0 | (BigInteger.One << $1)"
+        returns_type: java.math.BigInteger
+      - java_member: clearBit
+        arg_count: 1
+        kind: template
+        expression: "$0 & ~(BigInteger.One << $1)"
+        returns_type: java.math.BigInteger
+      - java_member: testBit
+        arg_count: 1
+        kind: template
+        expression: "(($0 >> $1) & BigInteger.One) != BigInteger.Zero"
+        confidence: medium
+        notes: "C# BigInteger has no TestBit; test the n-th bit via a shift and mask."
+      - java_member: and
+        arg_count: 1
+        kind: template
+        expression: "$0 & $1"
+        returns_type: java.math.BigInteger
+      - java_member: or
+        arg_count: 1
+        kind: template
+        expression: "$0 | $1"
+        returns_type: java.math.BigInteger
+      - java_member: xor
+        arg_count: 1
+        kind: template
+        expression: "$0 ^ $1"
+        returns_type: java.math.BigInteger
+      - java_member: not
+        arg_count: 0
+        kind: template
+        expression: "~$0"
+        returns_type: java.math.BigInteger
+      - java_member: andNot
+        arg_count: 1
+        kind: template
+        expression: "$0 & ~$1"
+        returns_type: java.math.BigInteger
+      - java_member: shiftLeft
+        arg_count: 1
+        kind: template
+        expression: "$0 << $1"
+        returns_type: java.math.BigInteger
+      - java_member: shiftRight
+        arg_count: 1
+        kind: template
+        expression: "$0 >> $1"
+        returns_type: java.math.BigInteger
+      - java_member: rotateLeft
+        arg_count: 1
+        kind: unsupported
+        notes: "No built-in BigInteger rotate in C#."
+      - java_member: rotateRight
+        arg_count: 1
+        kind: unsupported
+        notes: "No built-in BigInteger rotate in C#."
+      - java_member: compareTo
+        arg_count: 1
+        kind: template
+        expression: "$0.CompareTo($1)"
+      - java_member: equals
+        arg_count: 1
+        kind: template
+        expression: "$0 == $1"
+      - java_member: hashCode
+        arg_count: 0
+        kind: rename
+        csharp_member: GetHashCode
+      - java_member: intValueExact
+        arg_count: 0
+        kind: template
+        expression: "(int)$0"
+        confidence: medium
+        notes: "Java intValueExact throws ArithmeticException on overflow; C# does not by default."
+      - java_member: longValueExact
+        arg_count: 0
+        kind: template
+        expression: "(long)$0"
+        confidence: medium
+        notes: "Java longValueExact throws ArithmeticException on overflow; C# does not by default."
+      - java_member: shortValueExact
+        arg_count: 0
+        kind: template
+        expression: "(short)$0"
+        confidence: medium
+        notes: "Java shortValueExact throws ArithmeticException on overflow; C# does not by default."
+      - java_member: byteValueExact
+        arg_count: 0
+        kind: template
+        expression: "(byte)$0"
+        confidence: medium
+        notes: "Java byteValueExact throws ArithmeticException on overflow; C# does not by default."
+      - java_member: ZERO
+        member_type: field
+        kind: template
+        expression: "BigInteger.Zero"
+      - java_member: ONE
+        member_type: field
+        kind: template
+        expression: "BigInteger.One"
+      - java_member: TEN
+        member_type: field
+        kind: template
+        expression: "new BigInteger(10)"
+      - java_member: TWO
+        member_type: field
+        kind: template
+        expression: "new BigInteger(2)"
+
+  # ============================================================
+  # java.math.BigDecimal
+  # ============================================================
+  - java_class: java.math.BigDecimal
+    csharp_class: decimal
+    kind: class
+    confidence: medium
+    notes: "Java BigDecimal and C# decimal have different precision and scale behavior. Review carefully."
+    entries:
+      - java_member: valueOf
+        arg_count: 1
+        kind: template
+        expression: "new decimal($1)"
+        returns_type: java.math.BigDecimal
+      - java_member: valueOf
+        arg_count: 2
+        kind: template
+        expression: "new decimal($1) / new decimal((decimal)Math.Pow(10, $2))"
+        confidence: low
+        notes: "Java BigDecimal.valueOf(val, scale) — scale is approximate."
+        returns_type: java.math.BigDecimal
+      - java_member: intValue
+        arg_count: 0
+        kind: template
+        expression: "(int)$0"
+      - java_member: longValue
+        arg_count: 0
+        kind: template
+        expression: "(long)$0"
+      - java_member: floatValue
+        arg_count: 0
+        kind: template
+        expression: "(float)$0"
+      - java_member: doubleValue
+        arg_count: 0
+        kind: template
+        expression: "(double)$0"
+      - java_member: byteValue
+        arg_count: 0
+        kind: template
+        expression: "(byte)$0"
+      - java_member: shortValue
+        arg_count: 0
+        kind: template
+        expression: "(short)$0"
+      - java_member: intValueExact
+        arg_count: 0
+        kind: template
+        expression: "Convert.ToInt32($0)"
+        confidence: medium
+        notes: "Java throws ArithmeticException on overflow; C# Convert.ToInt32 also throws."
+      - java_member: longValueExact
+        arg_count: 0
+        kind: template
+        expression: "Convert.ToInt64($0)"
+        confidence: medium
+        notes: "Java throws ArithmeticException on overflow; C# Convert.ToInt64 also throws."
+      - java_member: shortValueExact
+        arg_count: 0
+        kind: template
+        expression: "Convert.ToInt16($0)"
+        confidence: medium
+      - java_member: byteValueExact
+        arg_count: 0
+        kind: template
+        expression: "Convert.ToByte($0)"
+        confidence: medium
+      - java_member: add
+        arg_count: 1
+        kind: template
+        expression: "$0 + $1"
+        returns_type: java.math.BigDecimal
+      - java_member: subtract
+        arg_count: 1
+        kind: template
+        expression: "$0 - $1"
+        returns_type: java.math.BigDecimal
+      - java_member: multiply
+        arg_count: 1
+        kind: template
+        expression: "$0 * $1"
+        returns_type: java.math.BigDecimal
+      - java_member: divide
+        arg_count: 1
+        kind: unsupported
+        notes: "Java BigDecimal.divide can specify scale and rounding; C# / throws on non-terminating. Use Math.Divide or manual implementation."
+      - java_member: divide
+        arg_count: 2
+        kind: unsupported
+        notes: "Java BigDecimal.divide(BigDecimal, RoundingMode) has no direct C# equivalent."
+      - java_member: divideToIntegralValue
+        arg_count: 1
+        kind: template
+        expression: "Math.Truncate($0 / $1)"
+        confidence: medium
+        notes: "Java divideToIntegralValue preserves scale; Math.Truncate does not."
+        returns_type: java.math.BigDecimal
+      - java_member: remainder
+        arg_count: 1
+        kind: template
+        expression: "$0 % $1"
+        returns_type: java.math.BigDecimal
+      - java_member: pow
+        arg_count: 1
+        kind: template
+        expression: "(decimal)Math.Pow((double)$0, $1)"
+        confidence: low
+        notes: "C# Math.Pow uses double; may lose precision for large values."
+        returns_type: java.math.BigDecimal
+      - java_member: abs
+        arg_count: 0
+        kind: template
+        expression: "System.Math.Abs($0)"
+        returns_type: java.math.BigDecimal
+      - java_member: negate
+        arg_count: 0
+        kind: template
+        expression: "-$0"
+        returns_type: java.math.BigDecimal
+      - java_member: plus
+        arg_count: 0
+        kind: template
+        expression: "+$0"
+        returns_type: java.math.BigDecimal
+      - java_member: compareTo
+        arg_count: 1
+        kind: template
+        expression: "$0.CompareTo($1)"
+      - java_member: equals
+        arg_count: 1
+        kind: template
+        expression: "$0 == $1"
+        confidence: medium
+        notes: "Java BigDecimal.equals compares scale too; C# == does not."
+      - java_member: max
+        arg_count: 1
+        kind: template
+        expression: "$0 > $1 ? $0 : $1"
+        confidence: medium
+        notes: "System.Math.Max does not accept decimal; use ternary instead."
+        returns_type: java.math.BigDecimal
+      - java_member: min
+        arg_count: 1
+        kind: template
+        expression: "$0 < $1 ? $0 : $1"
+        confidence: medium
+        notes: "System.Math.Min does not accept decimal; use ternary instead."
+        returns_type: java.math.BigDecimal
+      - java_member: scale
+        arg_count: 0
+        kind: unsupported
+        notes: "C# decimal does not have a scale concept like Java BigDecimal."
+      - java_member: precision
+        arg_count: 0
+        kind: unsupported
+        notes: "C# decimal does not have a precision method like Java BigDecimal."
+      - java_member: unscaledValue
+        arg_count: 0
+        kind: unsupported
+        notes: "C# decimal does not expose an unscaled value."
+      - java_member: setScale
+        arg_count: 1
+        kind: unsupported
+        notes: "C# decimal does not have setScale; use Math.Round or format strings."
+      - java_member: setScale
+        arg_count: 2
+        kind: unsupported
+        notes: "C# decimal does not have setScale; use Math.Round with MidpointRounding."
+      - java_member: stripTrailingZeros
+        arg_count: 0
+        kind: unsupported
+        notes: "C# decimal does not have a stripTrailingZeros method."
+      - java_member: toPlainString
+        arg_count: 0
+        kind: template
+        expression: "$0.ToString(\"G\")"
+        confidence: medium
+        notes: "Java toPlainString avoids scientific notation; C# G format may use it."
+        returns_type: java.lang.String
+      - java_member: toEngineeringString
+        arg_count: 0
+        kind: unsupported
+        notes: "No direct C# equivalent."
+      - java_member: toBigInteger
+        arg_count: 0
+        kind: template
+        expression: "(BigInteger)$0"
+        confidence: medium
+        notes: "Truncates toward zero."
+        returns_type: java.math.BigInteger
+      - java_member: toBigIntegerExact
+        arg_count: 0
+        kind: template
+        expression: "(BigInteger)$0"
+        confidence: medium
+        notes: "Java throws ArithmeticException if not an integer; C# does not."
+        returns_type: java.math.BigInteger
+      - java_member: hashCode
+        arg_count: 0
+        kind: rename
+        csharp_member: GetHashCode
+      - java_member: toString
+        arg_count: 0
+        kind: rename
+        csharp_member: ToString
+        returns_type: java.lang.String
+      - java_member: toString
+        arg_count: 1
+        kind: template
+        expression: "$0.ToString(\"F\")"
+        confidence: low
+        notes: "Java toString(int scale) — scale is approximate."
+        returns_type: java.lang.String
+      - java_member: ZERO
+        member_type: field
+        kind: template
+        expression: "0m"
+      - java_member: ONE
+        member_type: field
+        kind: template
+        expression: "1m"
+      - java_member: TEN
+        member_type: field
+        kind: template
+        expression: "10m"
+      - java_member: MAX_VALUE
+        member_type: field
+        kind: template
+        expression: "decimal.MaxValue"
+      - java_member: MIN_VALUE
+        member_type: field
+        kind: template
+        expression: "decimal.MinValue"
+      - java_member: ROUND_UP
+        member_type: field
+        kind: unsupported
+        notes: "C# decimal rounding uses MidpointRounding enum."
+      - java_member: ROUND_DOWN
+        member_type: field
+        kind: unsupported
+      - java_member: ROUND_CEILING
+        member_type: field
+        kind: unsupported
+      - java_member: ROUND_FLOOR
+        member_type: field
+        kind: unsupported
+      - java_member: ROUND_HALF_UP
+        member_type: field
+        kind: unsupported
+      - java_member: ROUND_HALF_DOWN
+        member_type: field
+        kind: unsupported
+      - java_member: ROUND_HALF_EVEN
+        member_type: field
+        kind: unsupported
+      - java_member: ROUND_UNNECESSARY
+        member_type: field
+        kind: unsupported
+
+  # ============================================================
+  # java.math.MathContext
+  # ============================================================
+  - java_class: java.math.MathContext
+    csharp_class: object
+    kind: class
+    confidence: low
+    notes: "Java MathContext specifies precision and rounding for BigDecimal; C# decimal has fixed precision."
+    entries:
+      - java_member: <init>
+        member_type: constructor
+        arg_count: 1
+        kind: unsupported
+        notes: "Java MathContext(precision) has no direct C# equivalent."
+      - java_member: <init>
+        member_type: constructor
+        arg_count: 2
+        kind: unsupported
+        notes: "Java MathContext(precision, roundingMode) has no direct C# equivalent."
+      - java_member: <init>
+        member_type: constructor
+        arg_count: 3
+        kind: unsupported
+        notes: "Java MathContext(precision, roundingMode, etc) has no direct C# equivalent."
+      - java_member: getPrecision
+        arg_count: 0
+        kind: unsupported
+      - java_member: getRoundingMode
+        arg_count: 0
+        kind: unsupported
+      - java_member: PRECISION
+        member_type: field
+        kind: unsupported
+        notes: "Java MathContext.PRECISION has no C# equivalent."
+      - java_member: UNLIMITED
+        member_type: field
+        kind: unsupported
+        notes: "Java MathContext.UNLIMITED has no C# equivalent."
+      - java_member: DECIMAL128
+        member_type: field
+        kind: unsupported
+        notes: "Java MathContext.DECIMAL128 has no C# equivalent."
+      - java_member: DECIMAL32
+        member_type: field
+        kind: unsupported
+        notes: "Java MathContext.DECIMAL32 has no C# equivalent."
+      - java_member: DECIMAL64
+        member_type: field
+        kind: unsupported
+        notes: "Java MathContext.DECIMAL64 has no C# equivalent."
+
+  # ============================================================
+  # java.math.RoundingMode (enum)
+  # ============================================================
+  - java_class: java.math.RoundingMode
+    csharp_class: MidpointRounding
+    kind: class
+    confidence: medium
+    notes: "Java RoundingMode and C# MidpointRounding have different values."
+    entries:
+      - java_member: UP
+        member_type: field
+        kind: template
+        expression: "MidpointRounding.AwayFromZero"
+        confidence: medium
+        notes: "Java RoundingMode.UP rounds away from zero."
+      - java_member: DOWN
+        member_type: field
+        kind: unsupported
+        notes: "Java RoundingMode.DOWN truncates toward zero; MidpointRounding has no equivalent."
+      - java_member: CEILING
+        member_type: field
+        kind: template
+        expression: "MidpointRounding.ToPositiveInfinity"
+        confidence: medium
+      - java_member: FLOOR
+        member_type: field
+        kind: template
+        expression: "MidpointRounding.ToNegativeInfinity"
+        confidence: medium
+      - java_member: HALF_UP
+        member_type: field
+        kind: template
+        expression: "MidpointRounding.AwayFromZero"
+        confidence: medium
+      - java_member: HALF_DOWN
+        member_type: field
+        kind: unsupported
+        notes: "No direct C# equivalent for HALF_DOWN rounding."
+      - java_member: HALF_EVEN
+        member_type: field
+        kind: template
+        expression: "MidpointRounding.ToEven"
+      - java_member: UNNECESSARY
+        member_type: field
+        kind: unsupported
+        notes: "No direct C# equivalent; C# decimal operations always succeed."

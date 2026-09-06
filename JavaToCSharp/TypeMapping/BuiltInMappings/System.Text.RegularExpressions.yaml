@@ -1,0 +1,207 @@
+namespaces:
+  - java_packages: [java.util.regex]
+    csharp_packages: [System.Text.RegularExpressions]
+
+class_map:
+  # ============================================================
+  # java.util.regex.Pattern
+  # ============================================================
+  - java_class: java.util.regex.Pattern
+    csharp_class: Regex
+    kind: class
+    entries:
+      - java_member: compile
+        arg_count: 1
+        kind: template
+        expression: "new Regex($1)"
+        returns_type: java.util.regex.Pattern
+      - java_member: compile
+        arg_count: 2
+        kind: template
+        expression: "new Regex($1, (RegexOptions)$2)"
+        confidence: medium
+        notes: "Java Pattern.compile(regex, flags) uses int flags; C# uses RegexOptions enum."
+        returns_type: java.util.regex.Pattern
+      - java_member: matches
+        arg_count: 2
+        kind: template
+        expression: "Regex.IsMatch($2, $1)"
+        confidence: medium
+        notes: "Java Pattern.matches is static and fully anchored; C# IsMatch is not anchored by default."
+      - java_member: matches
+        arg_count: 1
+        kind: template
+        expression: "$0.IsMatch($1)"
+        notes: "Instance method: pattern.matcher(input).matches() → Regex.IsMatch(input, pattern) or regex.IsMatch(input)."
+      - java_member: pattern
+        arg_count: 0
+        kind: property
+        csharp_member: Pattern
+        confidence: medium
+        notes: "Java Pattern.pattern() returns the regex string; C# Regex.Pattern may not be available in all versions."
+        returns_type: java.lang.String
+      - java_member: matcher
+        arg_count: 1
+        kind: template
+        expression: "$0.Match($1)"
+        returns_type: java.util.regex.Matcher
+      - java_member: split
+        arg_count: 1
+        kind: template
+        expression: "Regex.Split($1, $0.ToString())"
+        confidence: medium
+        notes: "Java pattern.split(input) uses the pattern to split; C# Regex.Split uses separate args."
+      - java_member: split
+        arg_count: 2
+        kind: template
+        expression: "Regex.Split($1, $0.ToString(), $2)"
+        confidence: medium
+      - java_member: asPredicate
+        arg_count: 0
+        kind: template
+        expression: "new Func<string, bool>(s => $0.IsMatch(s))"
+        confidence: medium
+        notes: "Java asPredicate returns a Predicate<String>; C# equivalent uses Func."
+      - java_member: flags
+        arg_count: 0
+        kind: unsupported
+        notes: "C# Regex does not expose flags as an integer."
+      - java_member: quote
+        arg_count: 1
+        kind: template
+        expression: "Regex.Escape($1)"
+        returns_type: java.lang.String
+
+  # ============================================================
+  # java.util.regex.Matcher
+  # ============================================================
+  - java_class: java.util.regex.Matcher
+    csharp_class: Match
+    kind: class
+    entries:
+      - java_member: matches
+        arg_count: 0
+        kind: property
+        csharp_member: Success
+        confidence: medium
+        notes: "Java matches() requires the ENTIRE string to match; C# Success is true if any part matches."
+      - java_member: find
+        arg_count: 0
+        kind: rename
+        csharp_member: NextMatch
+        confidence: medium
+        notes: "Java find() advances the Matcher internally; C# NextMatch returns a new Match. Manual iteration may be needed."
+      - java_member: find
+        arg_count: 1
+        kind: unsupported
+        notes: "Java find(start) resets matcher at position; C# has no equivalent."
+      - java_member: lookingAt
+        arg_count: 0
+        kind: unsupported
+        notes: "Java lookingAt matches from the beginning; no direct C# equivalent."
+      - java_member: group
+        arg_count: 0
+        kind: property
+        csharp_member: Value
+        returns_type: java.lang.String
+      - java_member: group
+        arg_count: 1
+        kind: template
+        expression: "$0.Groups[$1].Value"
+        confidence: medium
+        notes: "Java group(1) returns the first capturing group; C# Groups[1] is the same."
+        returns_type: java.lang.String
+      - java_member: group
+        arg_count: 2
+        kind: template
+        expression: "$0.Groups[$1].Captures[$2].Value"
+        confidence: medium
+        notes: "Java group(groupIdx, matchIdx) is for named groups; C# equivalent is approximate."
+        returns_type: java.lang.String
+      - java_member: start
+        arg_count: 0
+        kind: property
+        csharp_member: Index
+      - java_member: start
+        arg_count: 1
+        kind: template
+        expression: "$0.Groups[$1].Index"
+        confidence: medium
+      - java_member: end
+        arg_count: 0
+        kind: template
+        expression: "$0.Index + $0.Length"
+      - java_member: end
+        arg_count: 1
+        kind: template
+        expression: "$0.Groups[$1].Index + $0.Groups[$1].Length"
+        confidence: medium
+      - java_member: replaceAll
+        arg_count: 1
+        kind: template
+        expression: "$0.Result($1)"
+        confidence: medium
+        notes: "Java replaceAll(replacement) uses the current match; C# Result uses the current match's groups."
+        returns_type: java.lang.String
+      - java_member: replaceAll
+        arg_count: 2
+        kind: template
+        expression: "Regex.Replace($2, $0.ToString(), $1)"
+        confidence: medium
+        notes: "Java matcher.replaceAll(replacement) uses the matcher's pattern."
+        returns_type: java.lang.String
+      - java_member: replaceFirst
+        arg_count: 1
+        kind: template
+        expression: "Regex.Replace($0.ToString(), $0.ToString(), $1, 1)"
+        confidence: low
+        notes: "Java replaceFirst replaces in the original string; C# complex."
+        returns_type: java.lang.String
+      - java_member: replaceFirst
+        arg_count: 2
+        kind: template
+        expression: "Regex.Replace($2, $0.ToString(), $1, 1)"
+        confidence: medium
+        notes: "Java matcher.replaceFirst(replacement) — first occurrence only."
+        returns_type: java.lang.String
+      - java_member: groupCount
+        arg_count: 0
+        kind: template
+        expression: "$0.Groups.Count - 1"
+        confidence: medium
+        notes: "Java groupCount() returns the number of groups; C# Groups.Count includes the 0th group."
+      - java_member: reset
+        arg_count: 0
+        kind: unsupported
+        notes: "C# Match does not have a reset method."
+      - java_member: reset
+        arg_count: 1
+        kind: unsupported
+        notes: "C# Match does not have a reset method."
+      - java_member: region
+        arg_count: 2
+        kind: unsupported
+        notes: "C# Match does not support region setting."
+      - java_member: regionStart
+        arg_count: 0
+        kind: unsupported
+        notes: "C# Match does not expose region start."
+      - java_member: regionEnd
+        arg_count: 0
+        kind: unsupported
+        notes: "C# Match does not expose region end."
+      - java_member: hasTransparentBounds
+        arg_count: 0
+        kind: unsupported
+        notes: "C# Regex does not have transparent bounds."
+      - java_member: hasAnchoringBounds
+        arg_count: 0
+        kind: unsupported
+        notes: "C# Regex does not have anchoring bounds."
+      - java_member: pattern
+        arg_count: 0
+        kind: template
+        expression: "$0.ToString()"
+        confidence: medium
+        notes: "Java matcher.pattern() returns the Pattern object; C# Match.ToString() returns the matched string."
+        returns_type: java.lang.String

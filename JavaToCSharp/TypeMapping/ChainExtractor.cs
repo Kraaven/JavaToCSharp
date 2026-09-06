@@ -8,6 +8,8 @@ namespace JavaToCSharp.TypeMapping;
 /// of name segments (outermost first: <c>["System", "out", "println"]</c>).
 /// Only chains built from <see cref="NameExpr"/> and <see cref="FieldAccessExpr"/> scopes
 /// are considered; a method call is only allowed as the outermost node.
+/// Intermediate <see cref="MethodCallExpr"/> scopes cause the extraction to return
+/// <c>null</c> because their arguments are not representable in the flat name list.
 /// </summary>
 internal static class ChainExtractor
 {

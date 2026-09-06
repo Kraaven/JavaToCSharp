@@ -31,6 +31,9 @@ internal sealed class ClassMappingDto
 
     public string? Kind { get; set; }
 
+    [YamlMember(Alias = "match_qualified_only")]
+    public bool? MatchQualifiedOnly { get; set; }
+
     public List<MemberMappingDto>? Entries { get; set; }
 }
 
@@ -56,6 +59,9 @@ internal sealed class MemberMappingDto
     public string? Confidence { get; set; }
 
     public string? Notes { get; set; }
+
+    [YamlMember(Alias = "returns_type")]
+    public string? ReturnsType { get; set; }
 
     public List<ClassMappingDto>? ClassMap { get; set; }
 }
