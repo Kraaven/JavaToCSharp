@@ -126,6 +126,65 @@ public class ConversionContext(
     public VariableScopeTracker VariableScopes { get; } = new();
 
     /// <summary>
+    /// Simple names of types declared in the file currently being converted (nested types,
+    /// records, enums and hoisted local classes included). Used to keep program-defined type
+    /// names intact when they collide with names that have built-in conversions (e.g. a nested
+    /// record named <c>Double</c> must not become the C# <c>double</c> keyword).
+    /// </summary>
+    public ISet<string> DeclaredTypeNames { get; } = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// A Java local class or record that was hoisted out of a method body into a private nested
+    /// type of the enclosing class, together with the variables it captures.
+    /// </summary>
+    public sealed record HoistedLocalClassInfo(
+        string Name,
+        bool NeedsParent,
+        IReadOnlyList<(string Name, string JavaType)> CapturedLocals,
+        IReadOnlyList<string> TypeParams);
+
+    private readonly Stack<List<HoistedLocalClassInfo>> _hoistedLocalClassScopes = new();
+
+    /// <summary>
+    /// Begins a method-level scope for hoisted local class registrations. Local classes are
+    /// method-scoped in Java; registrations must not leak into sibling methods.
+    /// </summary>
+    public void PushHoistedLocalClassScope() => _hoistedLocalClassScopes.Push([]);
+
+    public void PopHoistedLocalClassScope()
+    {
+        if (_hoistedLocalClassScopes.Count > 0)
+        {
+            _hoistedLocalClassScopes.Pop();
+        }
+    }
+
+    public void RegisterHoistedLocalClass(HoistedLocalClassInfo info)
+    {
+        if (_hoistedLocalClassScopes.Count > 0)
+        {
+            _hoistedLocalClassScopes.Peek().Add(info);
+        }
+    }
+
+    /// <summary>
+    /// Finds a hoisted local class by simple name, searching method scopes innermost-first.
+    /// </summary>
+    public HoistedLocalClassInfo? FindHoistedLocalClass(string name)
+    {
+        foreach (var scope in _hoistedLocalClassScopes)
+        {
+            var found = scope.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.Ordinal));
+            if (found is not null)
+            {
+                return found;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Enters a new lexical scope for variable-type tracking. Call <see cref="PopVariableScope"/>
     /// when the scope ends so shadowed names are restored.
     /// </summary>

@@ -41,15 +41,18 @@ public class MethodDeclarationVisitor : BodyDeclarationVisitor<MethodDeclaration
             ? methodDecl.getNameAsString()
             : TypeHelper.Capitalize(methodDecl.getNameAsString());
         methodName = TypeHelper.ReplaceCommonMethodNames(methodName);
-
-        string typeParameters = methodDecl.getTypeParameters().ToString() ?? "";
-        if (typeParameters.Length > 2)
-        {
-            // Looks like "[T, U]". Convert to "<T, U>"
-            methodName += typeParameters.Replace('[', '<').Replace(']', '>');
-        }
+        methodName = TypeHelper.EscapeMemberName(methodName);
 
         var methodSyntax = SyntaxFactory.MethodDeclaration(SyntaxFactory.ParseTypeName(returnTypeName), methodName);
+
+        var typeParams = methodDecl.getTypeParameters().ToList<TypeParameter>();
+
+        if (typeParams is { Count: > 0 })
+        {
+            methodSyntax = methodSyntax.AddTypeParameterListParameters(typeParams
+                .Select(i => SyntaxFactory.TypeParameter(i.getNameAsString())).ToArray());
+            methodSyntax = methodSyntax.AddConstraintClauses(TypeHelper.GetTypeParameterListConstraints(context, typeParams).ToArray());
+        }
 
         var parameters = methodDecl.getParameters().ToList<Parameter>() ?? [];
 
@@ -87,15 +90,18 @@ public class MethodDeclarationVisitor : BodyDeclarationVisitor<MethodDeclaration
             ? methodDecl.getNameAsString()
             : TypeHelper.Capitalize(methodDecl.getNameAsString());
         methodName = TypeHelper.ReplaceCommonMethodNames(methodName);
-
-        string typeParameters = methodDecl.getTypeParameters().ToString() ?? "";
-        if (typeParameters.Length > 2)
-        {
-            // Looks like "[T, U]". Convert to "<T, U>"
-            methodName += typeParameters.Replace('[', '<').Replace(']', '>');
-        }
+        methodName = TypeHelper.EscapeMemberName(methodName);
 
         var methodSyntax = SyntaxFactory.MethodDeclaration(SyntaxFactory.ParseTypeName(returnTypeName), methodName);
+
+        var typeParams = methodDecl.getTypeParameters().ToList<TypeParameter>();
+
+        if (typeParams is { Count: > 0 })
+        {
+            methodSyntax = methodSyntax.AddTypeParameterListParameters(typeParams
+                .Select(i => SyntaxFactory.TypeParameter(i.getNameAsString())).ToArray());
+            methodSyntax = methodSyntax.AddConstraintClauses(TypeHelper.GetTypeParameterListConstraints(context, typeParams).ToArray());
+        }
 
         var mods = methodDecl.getModifiers().ToModifierKeywordSet();
 
@@ -120,7 +126,8 @@ public class MethodDeclarationVisitor : BodyDeclarationVisitor<MethodDeclaration
                     string javaMethodName = methodDecl.getNameAsString();
                     bool isObjectMethod = javaMethodName is "equals" or "hashCode" or "toString";
 
-                    if (extends.Count > 0 || isObjectMethod || context.IsConvertingEnumConstantBody)
+                    if ((extends.Count > 0 || isObjectMethod || context.IsConvertingEnumConstantBody)
+                        && !isInterface)
                     {
                         methodSyntax = methodSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.OverrideKeyword));
                         isOverride = true;
@@ -192,6 +199,7 @@ public class MethodDeclarationVisitor : BodyDeclarationVisitor<MethodDeclaration
         }
 
         context.PushVariableScope();
+        context.PushHoistedLocalClassScope();
 
         try
         {
@@ -221,6 +229,7 @@ public class MethodDeclarationVisitor : BodyDeclarationVisitor<MethodDeclaration
         }
         finally
         {
+            context.PopHoistedLocalClassScope();
             context.PopVariableScope();
         }
 

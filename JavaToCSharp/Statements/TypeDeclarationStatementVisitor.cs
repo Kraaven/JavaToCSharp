@@ -1,4 +1,5 @@
-﻿using com.github.javaparser.ast.stmt;
+﻿using com.github.javaparser.ast.body;
+using com.github.javaparser.ast.stmt;
 using JavaToCSharp.Declarations;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -11,8 +12,10 @@ public class TypeDeclarationStatementVisitor : StatementVisitor<LocalClassDeclar
     public override StatementSyntax? Visit(ConversionContext context, LocalClassDeclarationStmt statement)
     {
         var typeDeclaration = statement.getClassDeclaration();
-        var classSyntax = ClassOrInterfaceDeclarationVisitor.VisitClassDeclaration(context, typeDeclaration);
-        return ToStatement(classSyntax);
+
+        // C# has no local classes. Hoist the declaration out of the method body into a private
+        // nested type (published via PendingAnonymousTypes) with explicit capture plumbing.
+        return LocalClassHoister.HoistLocalType(context, statement, typeDeclaration);
     }
 
     internal static StatementSyntax? ToStatement(ClassDeclarationSyntax? classSyntax)
@@ -33,7 +36,6 @@ public class LocalRecordDeclarationStatementVisitor : StatementVisitor<LocalReco
     public override StatementSyntax? Visit(ConversionContext context, LocalRecordDeclarationStmt statement)
     {
         var recordDeclaration = statement.getRecordDeclaration();
-        var classSyntax = RecordDeclarationVisitor.VisitRecordDeclaration(context, recordDeclaration, isNested: true);
-        return TypeDeclarationStatementVisitor.ToStatement(classSyntax);
+        return LocalClassHoister.HoistLocalType(context, statement, recordDeclaration);
     }
 }

@@ -71,6 +71,7 @@ public class ConstructorDeclarationVisitor : BodyDeclarationVisitor<ConstructorD
         }
 
         context.PushVariableScope();
+        context.PushHoistedLocalClassScope();
 
         try
         {
@@ -85,6 +86,7 @@ public class ConstructorDeclarationVisitor : BodyDeclarationVisitor<ConstructorD
         }
         finally
         {
+            context.PopHoistedLocalClassScope();
             context.PopVariableScope();
         }
 

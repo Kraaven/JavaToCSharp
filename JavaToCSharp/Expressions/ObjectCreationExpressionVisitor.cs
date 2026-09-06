@@ -38,7 +38,67 @@ public class ObjectCreationExpressionVisitor : ExpressionVisitor<ObjectCreationE
             }
         }
 
+        // Constructor mapping: look up the Java type in the mapping index for
+        // constructor-level template or rename entries.
+        if (context.Options.MappingIndex is not null)
+        {
+            var javaTypeName = type.getNameAsString();
+            var fileCtx = context.FileMappingContext;
+
+            if (fileCtx is null || fileCtx.HasAnyMappedPackage)
+            {
+                if (TypeMappingResolver.TryResolveTypeName(context, javaTypeName, out _))
+                {
+                    var rawClass = TypeMappingResolver.StripGenericsAndArrays(javaTypeName);
+                    if (rawClass.Length > 0
+                        && context.Options.MappingIndex.TryGetByDottedName(rawClass, out var cls, out _)
+                        && cls is not null)
+                    {
+                        var ctorArgs = newExpr.getArguments();
+                        var argCount = ctorArgs?.size() ?? 0;
+                        var ctorEntry = TypeMappingResolver.FindConstructor(cls, argCount, ctorArgs);
+                        if (ctorEntry is not null)
+                        {
+                            return EmitConstructorMapping(context, ctorEntry, typeSyntax, ctorArgs);
+                        }
+                    }
+                }
+            }
+        }
+
         var args = newExpr.getArguments();
+
+        // Hoisted local classes (Java local class/record) are nested types whose captured
+        // variables are received through constructor parameters; supply them at the call site.
+        var hoisted = context.FindHoistedLocalClass(type.getNameAsString());
+        if (hoisted is not null)
+        {
+            if (hoisted.TypeParams is { Count: > 0 } && typeSyntax is not GenericNameSyntax)
+            {
+                typeSyntax = SyntaxFactory.GenericName(typeSyntax.ToString())
+                    .AddTypeArgumentListArguments(hoisted.TypeParams
+                        .Select(p => SyntaxFactory.ParseTypeName(p))
+                        .ToArray());
+            }
+
+            var creation = args is null || args.size() == 0
+                ? SyntaxFactory.ObjectCreationExpression(typeSyntax).WithArgumentList(SyntaxFactory.ArgumentList())
+                : SyntaxFactory.ObjectCreationExpression(typeSyntax, TypeHelper.GetSyntaxFromArguments(context, args), null);
+
+            if (hoisted.NeedsParent)
+            {
+                creation = creation.AddArgumentListArguments(SyntaxFactory.Argument(SyntaxFactory.ThisExpression()));
+            }
+
+            if (hoisted.CapturedLocals is { Count: > 0 })
+            {
+                creation = creation.AddArgumentListArguments(hoisted.CapturedLocals
+                    .Select(c => SyntaxFactory.Argument(SyntaxFactory.IdentifierName(TypeHelper.EscapeIdentifier(c.Name))))
+                    .ToArray());
+            }
+
+            return creation;
+        }
 
         if (args is null || args.size() == 0)
         {
@@ -46,6 +106,57 @@ public class ObjectCreationExpressionVisitor : ExpressionVisitor<ObjectCreationE
         }
 
         return SyntaxFactory.ObjectCreationExpression(typeSyntax, TypeHelper.GetSyntaxFromArguments(context, args), null);
+    }
+
+    private static ExpressionSyntax EmitConstructorMapping(
+        ConversionContext context,
+        MemberMapping entry,
+        TypeSyntax typeSyntax,
+        java.util.List? args)
+    {
+        switch (entry.Kind)
+        {
+            case MemberMappingKind.Rename:
+            {
+                TypeSyntax resolvedType;
+                if (entry.CSharpMember is not null && typeSyntax is GenericNameSyntax genericType)
+                {
+                    resolvedType = SyntaxFactory.GenericName(entry.CSharpMember)
+                        .WithTypeArgumentList(genericType.TypeArgumentList);
+                }
+                else
+                {
+                    resolvedType = SyntaxFactory.ParseTypeName(entry.CSharpMember ?? typeSyntax.ToFullString());
+                }
+                if (args is null || args.size() == 0)
+                {
+                    return SyntaxFactory.ObjectCreationExpression(resolvedType).WithArgumentList(SyntaxFactory.ArgumentList());
+                }
+
+                return SyntaxFactory.ObjectCreationExpression(resolvedType, TypeHelper.GetSyntaxFromArguments(context, args), null);
+            }
+
+            case MemberMappingKind.Template when entry.Expression is not null:
+            {
+                var receiverStr = typeSyntax.ToFullString().Trim();
+                if (TypeMappingResolver.TryFillTemplate(context, receiverStr, entry.Expression, args, out var templateSyntax))
+                {
+                    return templateSyntax;
+                }
+
+                goto default;
+            }
+
+            default:
+            {
+                if (args is null || args.size() == 0)
+                {
+                    return SyntaxFactory.ObjectCreationExpression(typeSyntax).WithArgumentList(SyntaxFactory.ArgumentList());
+                }
+
+                return SyntaxFactory.ObjectCreationExpression(typeSyntax, TypeHelper.GetSyntaxFromArguments(context, args), null);
+            }
+        }
     }
 
     private static ObjectCreationExpressionSyntax VisitAnonymousClassCreationExpression(ConversionContext context, ObjectCreationExpr newExpr, List<BodyDeclaration> anonBody)
