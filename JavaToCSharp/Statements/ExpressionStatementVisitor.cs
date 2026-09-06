@@ -73,13 +73,6 @@ public class ExpressionStatementVisitor : StatementVisitor<ExpressionStmt>
                 arrayRank = type.getArrayLevel();
                 string name = item.getNameAsString();
                 context.DeclareVariable(name, item.getType().toString());
-                if (type.getArrayLevel() > 0)
-                {
-                    while (name.EndsWith("[]"))
-                    {
-                        name = name[..^2];
-                    }
-                }
 
                 var typeSyntax = TypeHelper.ConvertTypeSyntax(context, commonType, arrayRank ?? 0);
 
@@ -118,15 +111,7 @@ public class ExpressionStatementVisitor : StatementVisitor<ExpressionStmt>
 
             string name = item.getNameAsString();
 
-            if (type.getArrayLevel() > 0)
-            {
-                while (name.EndsWith("[]"))
-                {
-                    name = name[..^2];
-                }
-            }
-
-            context.DeclareVariable(item.getNameAsString(), item.getType().toString());
+            context.DeclareVariable(name, item.getType().toString());
 
             var initExpr = item.getInitializer().FromOptional<Expression>();
 
@@ -135,13 +120,13 @@ public class ExpressionStatementVisitor : StatementVisitor<ExpressionStmt>
                 var initSyntax = ExpressionVisitor.VisitExpression(context, initExpr);
                 if (initSyntax is not null)
                 {
-                    var varDeclarationSyntax = SyntaxFactory.VariableDeclarator(name).WithInitializer(SyntaxFactory.EqualsValueClause(initSyntax));
+                    var varDeclarationSyntax = SyntaxFactory.VariableDeclarator(TypeHelper.EscapeIdentifier(name)).WithInitializer(SyntaxFactory.EqualsValueClause(initSyntax));
                     variables.Add(varDeclarationSyntax);
                 }
             }
             else
             {
-                variables.Add(SyntaxFactory.VariableDeclarator(name));
+                variables.Add(SyntaxFactory.VariableDeclarator(TypeHelper.EscapeIdentifier(name)));
             }
         }
 

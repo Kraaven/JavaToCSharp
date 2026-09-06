@@ -23,13 +23,9 @@ public class ForEachStatementVisitor : StatementVisitor<ForEachStmt>
 
         var variableDeclarators = varExpr.getVariables()?.ToList<VariableDeclarator>()?? [];
         var vars = variableDeclarators
-                   .Select(i => SyntaxFactory.VariableDeclarator(i.toString()))
+                   .Select(i => SyntaxFactory.VariableDeclarator(
+                       SyntaxFactory.Identifier(TypeHelper.EscapeIdentifier(i.getNameAsString()))))
                    .ToArray();
-
-        foreach (var declarator in variableDeclarators)
-        {
-            context.DeclareVariable(declarator.getNameAsString(), varExpr.getCommonType().toString());
-        }
 
         var body = foreachStmt.getBody();
 

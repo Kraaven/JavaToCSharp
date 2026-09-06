@@ -41,7 +41,7 @@ public class FieldAccessExpressionVisitor : ExpressionVisitor<FieldAccessExpr>
         field = context.Options.PreserveJavaMethodNames
             ? field
             : TypeHelper.ReplaceCommonFieldNames(field);
-        field = TypeHelper.EscapeIdentifier(field);
+        field = TypeHelper.EscapeMemberName(field);
 
         return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, scopeSyntax, SyntaxFactory.IdentifierName(field));
     }

@@ -16,6 +16,8 @@ public class ForStatementVisitor : StatementVisitor<ForStmt>
         var initSyntaxes = new List<ExpressionSyntax>();
         VariableDeclarationSyntax? varSyntax = null;
 
+        var forInitDeclarations = new List<(string Name, string Type)>();
+
         if (inits is not null)
         {
             foreach (var init in inits)
@@ -26,15 +28,24 @@ public class ForStatementVisitor : StatementVisitor<ForStmt>
 
                     var variableDeclarators = varExpr.getVariables()?.ToList<VariableDeclarator>() ?? [];
                     var vars = variableDeclarators
-                               .Select(i => SyntaxFactory.VariableDeclarator(i.toString()))
+                               .Select(i =>
+                               {
+                                   var decl = SyntaxFactory.VariableDeclarator(TypeHelper.EscapeIdentifier(i.getNameAsString()));
+                                   var initExpr = i.getInitializer().FromOptional<Expression>();
+                                   if (initExpr is not null && ExpressionVisitor.VisitExpression(context, initExpr) is { } initSyntax)
+                                   {
+                                       decl = decl.WithInitializer(SyntaxFactory.EqualsValueClause(initSyntax));
+                                   }
+                                   return decl;
+                               })
                                .ToArray();
 
                     foreach (var declarator in variableDeclarators)
                     {
-                        context.DeclareVariable(declarator.getNameAsString(), declarator.getType().toString());
+                        forInitDeclarations.Add((declarator.getNameAsString(), declarator.getType().toString()));
                     }
 
-                    varSyntax = SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName(type), SyntaxFactory.SeparatedList(vars, Enumerable.Repeat(SyntaxFactory.Token(SyntaxKind.CommaToken), vars.Length - 1)));
+                    varSyntax = SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName(type), SyntaxFactory.SeparatedList(vars, Enumerable.Repeat(SyntaxFactory.Token(SyntaxKind.CommaToken), Math.Max(vars.Length - 1, 0))));
                 }
                 else
                 {
@@ -65,6 +76,11 @@ public class ForStatementVisitor : StatementVisitor<ForStmt>
 
         try
         {
+            foreach (var (name, type) in forInitDeclarations)
+            {
+                context.DeclareVariable(name, type);
+            }
+
             var bodySyntax = VisitStatement(context, body);
 
             if (bodySyntax is null)

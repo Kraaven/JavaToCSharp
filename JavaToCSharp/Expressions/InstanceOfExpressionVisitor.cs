@@ -21,8 +21,9 @@ public class InstanceOfExpressionVisitor : ExpressionVisitor<InstanceOfExpr>
             return PatternConversion.PatternToIsCondition(context, exprSyntax, pattern);
         }
 
-        var type = TypeHelper.ConvertTypeOf(context, expr);
-        type = TypeHelper.ReplaceWildcardsWithTypeParameters(type, context.TypeParameterNames);
+        var javaTypeName = expr.getType().toString();
+        javaTypeName = TypeHelper.ReplaceWildcardsWithTypeParameters(javaTypeName, context.TypeParameterNames);
+        var type = TypeHelper.ConvertType(context, javaTypeName);
 
         return SyntaxFactory.BinaryExpression(
             SyntaxKind.IsExpression,

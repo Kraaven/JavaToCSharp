@@ -79,7 +79,8 @@ public class TryStatementVisitor : StatementVisitor<TryStmt>
                             SyntaxFactory.VariableDeclaration(
                                 SyntaxFactory.ParseTypeName(TypeHelper.ConvertType(context, variable.getType())),
                                 SyntaxFactory.SeparatedList([
-                                    SyntaxFactory.VariableDeclarator(variable.getNameAsString())
+                                    SyntaxFactory.VariableDeclarator(
+                                        SyntaxFactory.Identifier(TypeHelper.EscapeIdentifier(variable.getNameAsString())))
                                         .WithInitializer(SyntaxFactory.EqualsValueClause(initSyntax))
                                 ])
                             ));

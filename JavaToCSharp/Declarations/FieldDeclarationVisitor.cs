@@ -37,14 +37,6 @@ public class FieldDeclarationVisitor : BodyDeclarationVisitor<FieldDeclaration>
 
             string name = item.getNameAsString();
 
-            if (type.getArrayLevel() > 0)
-            {
-                while (name.EndsWith("[]"))
-                {
-                    name = name[..^2];
-                }
-            }
-
             context.DeclareVariable(name, item.getType().toString());
 
             var initExpr = item.getInitializer().FromOptional<Expression>();
@@ -55,12 +47,12 @@ public class FieldDeclarationVisitor : BodyDeclarationVisitor<FieldDeclaration>
 
                 if (initSyntax is not null)
                 {
-                    var varDeclarationSyntax = SyntaxFactory.VariableDeclarator(name).WithInitializer(SyntaxFactory.EqualsValueClause(initSyntax));
+                    var varDeclarationSyntax = SyntaxFactory.VariableDeclarator(TypeHelper.EscapeIdentifier(name)).WithInitializer(SyntaxFactory.EqualsValueClause(initSyntax));
                     variables.Add(varDeclarationSyntax);
                 }
             }
             else
-                variables.Add(SyntaxFactory.VariableDeclarator(name));
+                variables.Add(SyntaxFactory.VariableDeclarator(TypeHelper.EscapeIdentifier(name)));
         }
 
         var typeSyntax = TypeHelper.ConvertTypeSyntax(context, commonType, arrayRank ?? 0);
@@ -68,7 +60,7 @@ public class FieldDeclarationVisitor : BodyDeclarationVisitor<FieldDeclaration>
         var fieldSyntax = SyntaxFactory.FieldDeclaration(
             SyntaxFactory.VariableDeclaration(
                 typeSyntax,
-                SyntaxFactory.SeparatedList(variables, Enumerable.Repeat(SyntaxFactory.Token(SyntaxKind.CommaToken), variables.Count - 1))));
+                SyntaxFactory.SeparatedList(variables, Enumerable.Repeat(SyntaxFactory.Token(SyntaxKind.CommaToken), Math.Max(variables.Count - 1, 0)))));
 
         var mods = fieldDecl.getModifiers().ToModifierKeywordSet();
 
@@ -87,7 +79,6 @@ public class FieldDeclarationVisitor : BodyDeclarationVisitor<FieldDeclaration>
     public override MemberDeclarationSyntax VisitForInterface(ConversionContext context,
         InterfaceDeclarationSyntax interfaceSyntax, FieldDeclaration declaration)
     {
-        // TODO: throw new NotImplementedException("Need to implement diversion of static fields from interface declaration to static class");
         return VisitForClass(context, null, declaration, new List<ClassOrInterfaceType>(), new List<ClassOrInterfaceType>());
     }
 }

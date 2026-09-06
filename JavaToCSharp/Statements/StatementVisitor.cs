@@ -62,8 +62,12 @@ public abstract class StatementVisitor
             var syntax = VisitStatement(context, statement);
             if (syntax != null)
             {
-                // Flatten synthetic blocks that only exist to carry pending statements
-                if (syntax is BlockSyntax block && statement is not BlockStmt)
+                // Flatten synthetic blocks that only exist to carry pending declarations,
+                // but only when the block is trivially small (just pending statements).
+                // Blocks containing the actual converted statement should stay wrapped
+                // to preserve correct scope nesting.
+                if (syntax is BlockSyntax block && statement is not BlockStmt
+                    && block.Statements.Count <= 2)
                 {
                     result.AddRange(block.Statements);
                 }
