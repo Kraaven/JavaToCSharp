@@ -1,4 +1,4 @@
-﻿using com.github.javaparser.ast;
+using com.github.javaparser.ast;
 using com.github.javaparser.ast.body;
 using com.github.javaparser.ast.expr;
 using com.github.javaparser.ast.stmt;
@@ -67,6 +67,7 @@ public class EnumDeclarationVisitor : BodyDeclarationVisitor<EnumDeclaration>
         }
 
         context.LastTypeName = name;
+        context.DeclaredTypeNames.Add(name);
 
         var entries = enumDecl.getEntries().ToList<EnumConstantDeclaration>() ?? [];
         var members = enumDecl.getMembers()?.ToList<BodyDeclaration>() ?? [];

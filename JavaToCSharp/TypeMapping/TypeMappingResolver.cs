@@ -3,6 +3,7 @@ using com.github.javaparser.ast;
 using com.github.javaparser.ast.expr;
 using com.github.javaparser.ast.type;
 using JavaToCSharp.Expressions;
+using JavaToCSharp.Utilities;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -34,6 +35,12 @@ public enum MappingResolutionStatus
 public static class TypeMappingResolver
 {
     /// <summary>
+    /// Sentinel value for <c>returns_type</c> meaning "the returned type is generic and could be
+    /// any class". Chain resolution infers the concrete class from the members called on the result.
+    /// </summary>
+    public const string GenericReturnType = "GenericType";
+
+    /// <summary>
     /// Checks if the root name of a chain (e.g. "System" in "System.out.println") belongs to
     /// a Java package that is active (imported) in the current file. Uses the mapping index
     /// to reverse-lookup which package the root type belongs to.
@@ -51,7 +58,9 @@ public static class TypeMappingResolver
         // user-defined type. Don't gate it — let it fall through to default conversion.
         return true;
     }
-    private static readonly Regex TemplatePlaceholderRegex = new(@"\$(\d+|rest)", RegexOptions.Compiled);
+    private static readonly Regex TemplatePlaceholderRegex = new(@"\$(\d+|rest|[A-Za-z_][A-Za-z0-9_]*)", RegexOptions.Compiled);
+
+    private static readonly Regex EmptyRestSeparatorRegex = new(@",\s+(?=\))", RegexOptions.Compiled);
 
     private static readonly Regex QualifiedTypeNameRegex = new(
         @"[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*",
@@ -102,7 +111,19 @@ public static class TypeMappingResolver
             return status;
         }
 
-        return TryResolveVariableReceiver(context, index, chain, call.getArguments(), isMethodCall: true, typeArgs, call, out output);
+        status = TryResolveVariableReceiver(context, index, chain, call.getArguments(), isMethodCall: true, typeArgs, call, out output);
+        if (status != MappingResolutionStatus.Unresolved)
+        {
+            return status;
+        }
+
+        status = TryResolveByImportedClass(context, index, chain, call.getArguments(), isMethodCall: true, typeArgs, call, out output);
+        if (status != MappingResolutionStatus.Unresolved)
+        {
+            return status;
+        }
+
+        return TryResolveByHeuristicInference(context, index, chain, call.getArguments(), isMethodCall: true, typeArgs, call, out output);
     }
 
     public static MappingResolutionStatus TryResolveFieldAccess(
@@ -142,7 +163,155 @@ public static class TypeMappingResolver
             return status;
         }
 
-        return TryResolveVariableReceiver(context, index, chain, null, isMethodCall: false, null, field, out output);
+        status = TryResolveVariableReceiver(context, index, chain, null, isMethodCall: false, null, field, out output);
+        if (status != MappingResolutionStatus.Unresolved)
+        {
+            return status;
+        }
+
+        status = TryResolveByImportedClass(context, index, chain, null, isMethodCall: false, null, field, out output);
+        if (status != MappingResolutionStatus.Unresolved)
+        {
+            return status;
+        }
+
+        return TryResolveByHeuristicInference(context, index, chain, null, isMethodCall: false, null, field, out output);
+    }
+
+    /// <summary>
+    /// Attempts to resolve a chain by resolving the first segment through the file's import
+    /// declarations. E.g. for <c>A.sb.func()</c> where <c>A</c> is imported as <c>com.example.A</c>,
+    /// resolves <c>A</c> to the imported class and resolves the remaining chain against it.
+    /// </summary>
+    private static MappingResolutionStatus TryResolveByImportedClass(
+        ConversionContext context,
+        TypeMappingIndex index,
+        List<string> segments,
+        java.util.List? args,
+        bool isMethodCall,
+        List<Type>? typeArgs,
+        Node node,
+        out ExpressionSyntax? output)
+    {
+        output = null;
+
+        if (segments.Count < 2)
+        {
+            return MappingResolutionStatus.Unresolved;
+        }
+
+        var fileCtx = context.FileMappingContext;
+        if (fileCtx is null)
+        {
+            return MappingResolutionStatus.Unresolved;
+        }
+
+        // Try to resolve the first segment through imports
+        if (!fileCtx.TryResolveClassName(segments[0], out var fqn))
+        {
+            return MappingResolutionStatus.Unresolved;
+        }
+
+        // Look up the FQN in the mapping index
+        if (!index.TryGetByQualifiedName(fqn!, out var cls))
+        {
+            return MappingResolutionStatus.Unresolved;
+        }
+
+        // Build a receiver from the imported class name
+        var receiver = SyntaxFactory.IdentifierName(TypeHelper.EscapeIdentifier(segments[0]));
+        return ResolveFromRoot(context, index, segments, 1, cls!, receiver, args, isMethodCall, typeArgs, node, out output);
+    }
+
+    /// <summary>
+    /// Heuristic resolution: when type-denoting, variable-receiver, and import-based resolution
+    /// all fail, infer the receiver's type from the methods called on it. Looks up the member
+    /// name in the reverse index, filters by the file's active packages, and if exactly one
+    /// class matches, infers the type and resolves the chain.
+    /// </summary>
+    private static MappingResolutionStatus TryResolveByHeuristicInference(
+        ConversionContext context,
+        TypeMappingIndex index,
+        List<string> segments,
+        java.util.List? args,
+        bool isMethodCall,
+        List<Type>? typeArgs,
+        Node node,
+        out ExpressionSyntax? output)
+    {
+        output = null;
+
+        if (segments.Count < 2)
+        {
+            return MappingResolutionStatus.Unresolved;
+        }
+
+        var fileCtx = context.FileMappingContext;
+        var activePackages = fileCtx?.ActiveJavaPackages;
+
+        // Get the member name (last segment)
+        var memberName = segments[^1];
+
+        // Guard: the chain root must plausibly be a class reference, not a variable of a known
+        // (but unmapped) type. When the root is a declared variable whose Java type is not in the
+        // mapping index, the member belongs to that converted type — inferring an unrelated
+        // mapped class by member name alone would hijack the call (e.g. a DamageSource.is(TagKey)
+        // being resolved against com.google.common.base.CharMatcher.is).
+        var rootSegment = segments[0];
+        if (context.TryGetVariableType(rootSegment, out var rootVariableType)
+            && !index.TryGetByDottedName(StripGenericsAndArrays(rootVariableType), out _, out _))
+        {
+            return MappingResolutionStatus.Unresolved;
+        }
+
+        // Guard: Java class names are PascalCase. A camelCase root that is not a mapped class
+        // name is a variable/field reference, not a class — do not infer a class for it.
+        if (rootSegment.Length > 0
+            && char.IsLower(rootSegment[0])
+            && !index.TryGetByDottedName(rootSegment, out _, out _))
+        {
+            return MappingResolutionStatus.Unresolved;
+        }
+
+        // Find all classes that have a mapping for this member
+        var candidates = index.FindClassesByMember(memberName, activePackages);
+
+        if (candidates.Count != 1)
+        {
+            return MappingResolutionStatus.Unresolved;
+        }
+
+        var matchedClass = candidates[0].OwnerClass;
+
+        // Look up the class mapping
+        if (!index.TryGetByQualifiedName(matchedClass, out var cls))
+        {
+            return MappingResolutionStatus.Unresolved;
+        }
+
+        // Build a receiver expression from the preceding segments
+        var receiver = BuildReceiverExpression(segments, segments.Count - 1);
+
+        // Resolve the chain from the inferred root
+        return ResolveFromRoot(context, index, segments, segments.Count - 1, cls!, receiver, args, isMethodCall, typeArgs, node, out output);
+    }
+
+    /// <summary>
+    /// Builds a member-access expression from the first <paramref name="count"/> segments
+    /// of a chain. E.g. for segments ["A", "sb", "append"] with count 2, produces <c>A.sb</c>.
+    /// </summary>
+    private static ExpressionSyntax BuildReceiverExpression(List<string> segments, int count)
+    {
+        ExpressionSyntax result = SyntaxFactory.IdentifierName(TypeHelper.EscapeIdentifier(segments[0]));
+        for (int i = 1; i < count; i++)
+        {
+            result = SyntaxFactory.MemberAccessExpression(
+                SyntaxKind.SimpleMemberAccessExpression,
+                result,
+                SyntaxFactory.IdentifierName(TypeHelper.EscapeIdentifier(segments[i])));
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -248,6 +417,11 @@ public static class TypeMappingResolver
                 var owner = FindNestedOwner(entry.ClassMap, remaining[i + 1], nextIsLast, args);
                 if (owner is not null)
                 {
+                    if (owner.CSharpClass != current.CSharpClass)
+                    {
+                        var baseScope = receiver ?? SyntaxFactory.IdentifierName(TypeHelper.EscapeIdentifier(current.CSharpClass));
+                        receiver = MemberAccess(baseScope, owner.CSharpClass);
+                    }
                     current = owner;
                     traversed.Add(current);
                     continue;
@@ -417,6 +591,44 @@ public static class TypeMappingResolver
         return FindMember(cls, member, isLast: true, args, isMethodCall, out _);
     }
 
+    /// <summary>
+    /// Finds a constructor mapping entry for the given class and argument count.
+    /// Used by <see cref="ObjectCreationExpressionVisitor"/> to apply constructor-level
+    /// template or rename mappings.
+    /// </summary>
+    internal static MemberMapping? FindConstructor(ClassMapping cls, int argCount, java.util.List? args)
+    {
+        var candidates = cls.Entries
+            .Where(e => e.MemberType == MemberMappingType.Constructor
+                && (e.IsVariadic || e.ArgCount == argCount))
+            .ToList();
+
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        if (candidates.Count == 1)
+        {
+            return candidates[0];
+        }
+
+        if (args is not null)
+        {
+            var inferred = args.OfType<Expression>().Select(ArgumentTypeInferrer.InferArgType).ToList();
+            var matched = candidates
+                .Where(c => c.TypeHint is not null && ArgumentTypeInferrer.TypeHintMatches(c.TypeHint, inferred))
+                .ToList();
+            if (matched.Count == 1)
+            {
+                return matched[0];
+            }
+        }
+
+        var withoutHint = candidates.Where(c => c.TypeHint is null).ToList();
+        return withoutHint.Count == 1 ? withoutHint[0] : null;
+    }
+
     private static MemberMapping? FindMember(
         ClassMapping cls,
         string member,
@@ -559,7 +771,7 @@ public static class TypeMappingResolver
         var result = scope;
         for (var i = 0; i < tail.Count; i++)
         {
-            var name = TypeHelper.EscapeIdentifier(DefaultMemberName(context, tail[i]));
+            var name = TypeHelper.EscapeMemberName(DefaultMemberName(context, tail[i]));
             if (i == tail.Count - 1 && isMethodCall && args is not null)
             {
                 var memberAccess = SyntaxFactory.MemberAccessExpression(
@@ -582,35 +794,59 @@ public static class TypeMappingResolver
 
     private static SimpleNameSyntax CreateMethodName(string name, List<Type>? typeArgs)
     {
-        var escaped = TypeHelper.EscapeIdentifier(name);
+        var escaped = TypeHelper.EscapeMemberName(name);
         if (typeArgs is not { Count: > 0 })
         {
             return SyntaxFactory.IdentifierName(escaped);
         }
 
         var typeArgSyntaxes = typeArgs
-            .Select(t => SyntaxFactory.ParseTypeName(TypeHelper.ConvertType(t.toString())))
+            .Select(t => SyntaxFactory.ParseTypeName(
+                TypeHelper.IsWildcardType(t)
+                    ? TypeHelper.ConvertWildcardType(t.toString())
+                    : TypeHelper.ConvertType(t.toString())))
             .ToArray();
         return SyntaxFactory.GenericName(escaped).AddTypeArgumentListArguments(typeArgSyntaxes);
     }
 
-    private static bool TryFillTemplate(
+    internal static bool TryFillTemplate(
         ConversionContext context,
         string receiver,
         string template,
         java.util.List? args,
         out ExpressionSyntax syntax)
     {
-        var argSyntaxes = new List<ExpressionSyntax>();
+        // Positionally aligned with the Java argument list: a failed conversion leaves a null
+        // slot so that "$2" always refers to the second argument, even when "$1" did not convert.
+        // An argument whose visitor throws (unsupported expression type) also leaves a null slot
+        // instead of failing the whole file — the placeholder keeps the statement well-formed.
+        var argSyntaxes = new List<ExpressionSyntax?>();
         if (args is not null)
         {
             foreach (var arg in args.OfType<Expression>())
             {
-                var argSyntax = ExpressionVisitor.VisitExpression(context, arg);
-                if (argSyntax is not null)
+                try
                 {
-                    argSyntaxes.Add(argSyntax);
+                    argSyntaxes.Add(ExpressionVisitor.VisitExpression(context, arg));
                 }
+                catch (Exception)
+                {
+                    argSyntaxes.Add(null);
+                }
+            }
+        }
+
+        // Format string translation: if the first Java arg is a string literal containing '%',
+        // translate Java printf format specifiers to C# composite format placeholders.
+        if (argSyntaxes.Count > 0 && args is not null && args.size() > 0 && args.get(0) is StringLiteralExpr sle)
+        {
+            var raw = sle.getValue();
+            if (raw.Contains('%'))
+            {
+                var translated = FormatStringTranslator.ConvertJavaToCSharp(raw);
+                argSyntaxes[0] = SyntaxFactory.LiteralExpression(
+                    SyntaxKind.StringLiteralExpression,
+                    SyntaxFactory.Literal(translated));
             }
         }
 
@@ -626,12 +862,30 @@ public static class TypeMappingResolver
 
         var maxIndex = referencedIndexes.Count == 0 ? 0 : referencedIndexes.Max();
 
+        // "$rest" expands to nothing while a named placeholder already consumed every argument
+        // ("string.Format($1, $rest)" with a single format string). Templates usually separate
+        // $rest with a literal ", ", so that leftover separator is collapsed on empty expansion.
+        var emptyRest = false;
+
         string Fill(Match match)
         {
             var value = match.Groups[1].Value;
             if (value == "rest")
             {
-                return string.Join(", ", argSyntaxes.Skip(maxIndex).Select(a => a.NormalizeWhitespace().ToFullString()));
+                var rest = argSyntaxes
+                    .Skip(maxIndex)
+                    .OfType<ExpressionSyntax>()
+                    .Select(a => a.NormalizeWhitespace().ToFullString())
+                    .ToArray();
+                if (rest.Length == 0)
+                {
+                    emptyRest = true;
+                    return "";
+                }
+
+                // The template is expected to carry its own separator before $rest
+                // ("string.Format($1, $rest)"); never re-add one here.
+                return string.Join(", ", rest);
             }
 
             if (value == "0")
@@ -639,21 +893,53 @@ public static class TypeMappingResolver
                 return receiver;
             }
 
+            if (char.IsLetter(value[0]))
+            {
+                // Named placeholder ($FACTORY, $OPTIONS, $SCOPES, $AUTH_CODE, ...) — the receiver
+                // is the nearest concrete value; emit it so no raw '$' leaks into the output.
+                return receiver;
+            }
+
             var argIndex = int.Parse(value) - 1;
-            return argIndex < argSyntaxes.Count
-                ? argSyntaxes[argIndex].NormalizeWhitespace().ToFullString()
-                : match.Value;
+            if (argIndex >= argSyntaxes.Count || argSyntaxes[argIndex] is not { } arg)
+            {
+                // The referenced argument could not be converted (its expression visitor returned
+                // null). Never leak the raw "$1" token into the output (unexpected '$' syntax
+                // cascades); substitute a placeholder that parses in any expression slot.
+                return "new object()";
+            }
+
+            return arg.NormalizeWhitespace().ToFullString();
         }
 
         var filled = TemplatePlaceholderRegex.Replace(template, Fill);
+        if (emptyRest)
+        {
+            filled = EmptyRestSeparatorRegex.Replace(filled, "");
+        }
+
         try
         {
             syntax = SyntaxFactory.ParseExpression(filled, consumeFullText: true);
+
+            // The tolerant parser may accept garbage (e.g. a lambda after '??' in an Optional
+            // orElseGet template, or an unclosed bracket), silently producing a partial tree that
+            // reprints as mid-statement truncation. Reject any fill that did not parse cleanly and
+            // fall back to a well-formed inline placeholder so the surrounding statement survives.
+            if (syntax.ContainsDiagnostics)
+            {
+                syntax = SyntaxFactory.ParseExpression(
+                    "/* TODO(java-to-csharp): invalid template expression */ new object()");
+            }
+
             return true;
         }
         catch (Exception)
         {
-            syntax = SyntaxFactory.IdentifierName(filled);
+            // Emit as a TODO comment with a placeholder expression rather than
+            // wrapping the entire string as an invalid identifier.
+            syntax = SyntaxFactory.ParseExpression(
+                $"/* TODO(java-to-csharp): template '{filled}' is not a valid C# expression */ new object()");
             return false;
         }
     }
@@ -662,7 +948,7 @@ public static class TypeMappingResolver
         => SyntaxFactory.MemberAccessExpression(
             SyntaxKind.SimpleMemberAccessExpression,
             scope,
-            SyntaxFactory.IdentifierName(TypeHelper.EscapeIdentifier(member)));
+            SyntaxFactory.IdentifierName(TypeHelper.EscapeMemberName(member)));
 
     private static void CollectUsings(ConversionContext context, List<ClassMapping> classes, int line)
     {
@@ -698,6 +984,16 @@ public static class TypeMappingResolver
         return lastDot < 0 ? "" : javaClass[..lastDot];
     }
 
+    /// <summary>
+    /// Prepares free-form mapping notes for insertion inside a C# block comment: line breaks are
+    /// collapsed (a '*/' must never appear so the comment stays balanced and inline-safe).
+    /// </summary>
+    private static string SanitizeForBlockComment(string text)
+    {
+        text = text.Trim().Replace("*/", "* /");
+        return text.Length <= 400 ? text : text[..397] + "...";
+    }
+
     private static ExpressionSyntax ApplyReview(ExpressionSyntax syntax, MemberMapping entry)
     {
         if (entry.Confidence == MappingConfidence.High)
@@ -709,7 +1005,9 @@ public static class TypeMappingResolver
         var note = string.IsNullOrWhiteSpace(entry.Notes)
             ? $"mapping for {entry.OwnerClass}.{entry.JavaMember} applied with {confidence} confidence"
             : entry.Notes;
-        var comment = $"// REVIEW(java-to-csharp): {confidence} confidence — {note}{Environment.NewLine}";
+        // A BLOCK comment (never a // line comment) so the note can never swallow the rest of the
+        // source line when the reviewed expression sits mid-statement (after '=', '??', '(', …).
+        var comment = $"/* REVIEW(java-to-csharp): {confidence} confidence - {SanitizeForBlockComment(note)} */";
         var trailing = syntax.GetTrailingTrivia();
         return syntax.WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.Comment(comment)).AddRange(trailing));
     }
@@ -728,19 +1026,43 @@ public static class TypeMappingResolver
             message = $"no safe mapping found for '{fragment}'";
         }
 
-        var commentLines = message
+        // A single multi-line BLOCK comment (never // line comments) so the note can never swallow
+        // the remainder of the source line when the placeholder is emitted mid-statement
+        // (return <note> <fragment>, x = <note> <fragment>, ( <note> <fragment> …).
+        var commentBody = message
             .Split(Environment.NewLine)
-            .Select(l => (SyntaxTrivia)SyntaxFactory.Comment($"// TODO(java-to-csharp): {l.Trim()}{Environment.NewLine}"));
-        var trivia = SyntaxFactory.TriviaList(commentLines);
+            .Select(SanitizeForBlockComment);
+        var trivia = SyntaxFactory.TriviaList(
+            (SyntaxTrivia)SyntaxFactory.Comment($"/* TODO(java-to-csharp): {string.Join(" ", commentBody)} */"));
 
-        ExpressionSyntax fragmentSyntax;
+        ExpressionSyntax? fragmentSyntax;
         try
         {
-            fragmentSyntax = SyntaxFactory.ParseExpression(fragment, consumeFullText: true);
+            // The fragment is raw Java text; rewrite Java-only syntax (explicit method type
+            // arguments, keyword member names) so Roslyn's tolerant parser yields valid C#.
+            fragmentSyntax = SyntaxFactory.ParseExpression(JavaFragmentNormalizer.Normalize(fragment), consumeFullText: true);
+
+            // The tolerant parser can still swallow garbage token runs (e.g. "s -> {..." before
+            // normalization, or a dangling "(T) x =>" lambda cast). Only accept the fragment when it
+            // parsed without diagnostics; otherwise fall back to a placeholder so the statement
+            // always remains well-formed.
+            if (fragmentSyntax is null || fragmentSyntax.ContainsDiagnostics)
+            {
+                fragmentSyntax = null;
+            }
         }
         catch (Exception)
         {
-            fragmentSyntax = SyntaxFactory.IdentifierName(fragment);
+            fragmentSyntax = null;
+        }
+
+        if (fragmentSyntax is null)
+        {
+            // Use a placeholder expression instead of wrapping invalid text as an identifier.
+            // 'new object()' parses and compiles in every expression slot (including statement
+            // position), unlike the bare 'object' previously used (CS0119/CS0201).
+            fragmentSyntax = SyntaxFactory.ParseExpression(
+                "/* TODO(java-to-csharp): unsupported fragment */ new object()");
         }
 
         return fragmentSyntax.WithLeadingTrivia(trivia);

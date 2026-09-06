@@ -149,6 +149,13 @@ public static partial class JavaToCSharpConverter
 
         context.NotifyStateChanged(ConversionState.BuildingCSharpAst);
 
+        // Pre-pass: register every type name declared anywhere in this file (nested types,
+        // records, enums and local classes included) before any member conversion begins. Types
+        // may be referenced before they are declared, so this cannot be done incrementally while
+        // visiting members; it keeps program-defined names (e.g. a nested record "Double") from
+        // being converted into built-in C# names (the "double" keyword).
+        RegisterDeclaredTypeNames(context, result);
+
         var types = result.getTypes().ToList<TypeDeclaration>() ?? [];
         var imports = result.getImports()?.ToList<ImportDeclaration>() ?? [];
         var package = result.getPackageDeclaration().FromOptional<PackageDeclaration>();
@@ -160,6 +167,13 @@ public static partial class JavaToCSharpConverter
                 .Where(i => !i.isStatic())
                 .Select(i => i.getNameAsString())
                 .ToList();
+
+            // Also add static imports to the mapping context so their classes are resolvable
+            var staticImportNames = imports
+                .Where(i => i.isStatic())
+                .Select(i => i.getNameAsString())
+                .ToList();
+            importNames.AddRange(staticImportNames);
 
             // Add the file's own package as active (types in the same package are always available)
             if (package is not null)
@@ -276,6 +290,36 @@ public static partial class JavaToCSharpConverter
         context.NotifyStateChanged(ConversionState.Done);
 
         return tree.GetText().ToString();
+    }
+
+    /// <summary>
+    /// Registers the simple name of every type declared anywhere in the compilation unit
+    /// (nested types, records, enums and local classes included) so that type-name conversion
+    /// can keep program-defined names intact even for forward references.
+    /// </summary>
+    private static void RegisterDeclaredTypeNames(ConversionContext context, CompilationUnit compilationUnit)
+    {
+        void Walk(Node node)
+        {
+            if (node is TypeDeclaration typeDeclaration)
+            {
+                context.DeclaredTypeNames.Add(typeDeclaration.getNameAsString());
+            }
+
+            var children = node.getChildNodes()?.ToList<Node>();
+
+            if (children is null)
+            {
+                return;
+            }
+
+            foreach (var child in children)
+            {
+                Walk(child);
+            }
+        }
+
+        Walk(compilationUnit);
     }
 
     internal static string RewritePrimitiveTypeWitnesses(string javaText)

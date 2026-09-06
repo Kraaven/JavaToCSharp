@@ -1,4 +1,4 @@
-﻿using com.github.javaparser.ast;
+using com.github.javaparser.ast;
 using com.github.javaparser.ast.body;
 using com.github.javaparser.ast.expr;
 using com.github.javaparser.ast.type;
@@ -23,7 +23,11 @@ public class ClassOrInterfaceDeclarationVisitor : BodyDeclarationVisitor<ClassOr
         InterfaceDeclarationSyntax interfaceSyntax,
         ClassOrInterfaceDeclaration declaration)
     {
-        return VisitClassDeclaration(context, declaration);
+        if (declaration.isInterface())
+        {
+            return VisitInterfaceDeclaration(context, declaration, true);
+        }
+        return VisitClassDeclaration(context, declaration, true);
     }
 
     public static InterfaceDeclarationSyntax VisitInterfaceDeclaration(ConversionContext context,
@@ -37,6 +41,7 @@ public class ClassOrInterfaceDeclarationVisitor : BodyDeclarationVisitor<ClassOr
         }
 
         context.LastTypeName = newTypeName;
+        context.DeclaredTypeNames.Add(newTypeName);
 
         var classSyntax = SyntaxFactory.InterfaceDeclaration(newTypeName);
 
@@ -113,6 +118,7 @@ public class ClassOrInterfaceDeclarationVisitor : BodyDeclarationVisitor<ClassOr
         }
 
         context.LastTypeName = name;
+        context.DeclaredTypeNames.Add(name);
 
         var classSyntax = SyntaxFactory.ClassDeclaration(name);
 
@@ -122,7 +128,7 @@ public class ClassOrInterfaceDeclarationVisitor : BodyDeclarationVisitor<ClassOr
         {
             classSyntax = classSyntax.AddTypeParameterListParameters(typeParams
                     .Select(i => SyntaxFactory.TypeParameter(i.getNameAsString())).ToArray());
-            classSyntax = classSyntax.AddConstraintClauses(TypeHelper.GetTypeParameterListConstraints(typeParams).ToArray());
+            classSyntax = classSyntax.AddConstraintClauses(TypeHelper.GetTypeParameterListConstraints(context, typeParams).ToArray());
         }
 
         var mods = classDecl.getModifiers().ToModifierKeywordSet();

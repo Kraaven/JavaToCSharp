@@ -83,6 +83,7 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
         }
 
         context.LastTypeName = name;
+        context.DeclaredTypeNames.Add(name);
 
         var classSyntax = SyntaxFactory.ClassDeclaration(name);
 

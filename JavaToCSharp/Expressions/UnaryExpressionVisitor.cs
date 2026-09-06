@@ -32,6 +32,14 @@ public class UnaryExpressionVisitor : ExpressionVisitor<UnaryExpr>
                 return isNotPattern;
             }
 
+            // Convert !(a == b) into a != b (and !(a != b) into a == b). This is essential for
+            // template-mapped expressions such as java isEmpty() -> "Count == 0", where emitting
+            // "(!x.Count == 0)" is invalid C# (negating an int) while "x.Count != 0" is correct.
+            if (TryInvertEquality(exprSyntax, out var inverted))
+            {
+                return inverted;
+            }
+
             kind = SyntaxKind.LogicalNotExpression;
         }
         else if (op == UnaryExpr.Operator.POSTFIX_DECREMENT)
@@ -77,13 +85,43 @@ public class UnaryExpressionVisitor : ExpressionVisitor<UnaryExpr>
     }
 
     /// <summary>
-    /// Wraps the expression in parentheses when applying logical-not to a binary expression
-    /// (e.g. <c>!(x == 0)</c> rather than the ambiguous <c>!x == 0</c>).
+    /// Rewrites <c>!(a == b)</c> as <c>a != b</c> and <c>!(a != b)</c> as <c>a == b</c>.
+    /// </summary>
+    private static bool TryInvertEquality(ExpressionSyntax exprSyntax, out ExpressionSyntax? result)
+    {
+        result = null;
+
+        while (exprSyntax is ParenthesizedExpressionSyntax parenthesized)
+        {
+            exprSyntax = parenthesized.Expression;
+        }
+
+        if (exprSyntax is not BinaryExpressionSyntax binary
+            || (binary.Kind() is not SyntaxKind.EqualsExpression and not SyntaxKind.NotEqualsExpression))
+        {
+            return false;
+        }
+
+        var newKind = binary.Kind() == SyntaxKind.EqualsExpression
+            ? SyntaxKind.NotEqualsExpression
+            : SyntaxKind.EqualsExpression;
+
+        result = SyntaxFactory.BinaryExpression(newKind, binary.Left, binary.Right);
+        return true;
+    }
+
+    /// <summary>
+    /// Wraps the expression in parentheses when applying logical-not to an expression whose
+    /// operator precedence is higher than <c>!</c> (binary operators, lambdas, conditionals,
+    /// assignments), e.g. <c>!(x == 0)</c> rather than the ambiguous <c>!x == 0</c>.
     /// </summary>
     private static ExpressionSyntax WrapLogicalNotIfNeeded(SyntaxKind kind, ExpressionSyntax expr)
     {
         if (kind == SyntaxKind.LogicalNotExpression
-            && expr is BinaryExpressionSyntax)
+            && (expr is BinaryExpressionSyntax
+                || expr is LambdaExpressionSyntax
+                || expr is ConditionalExpressionSyntax
+                || expr is AssignmentExpressionSyntax))
         {
             return SyntaxFactory.ParenthesizedExpression(
                 SyntaxFactory.PrefixUnaryExpression(kind, expr));
