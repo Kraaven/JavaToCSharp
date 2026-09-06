@@ -221,3 +221,8 @@ pip-log.txt
 .idea/
 # BenchmarkDotNet results
 BenchmarkDotNet.Artifacts/
+
+# JavaToCSharp build/pack artifacts
+output/
+TestTmp/
+nupkgs/
