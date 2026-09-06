@@ -43,7 +43,31 @@ public class ConvertTypeTests
     [Fact]
     public void ConvertType_WithGenericWildcard_ShouldReplaceToken()
     {
-        Assert.Equal("MyType<TWildcardTodo>", TypeHelper.ConvertType("MyType<?>"));
+        Assert.Equal("MyType<object>", TypeHelper.ConvertType("MyType<?>"));
+    }
+
+    [Fact]
+    public void ConvertType_WithDottedNestedWildcard_ShouldErase()
+    {
+        Assert.Equal(
+            "FrameGraphBuilder.InternalVirtualResource<object>",
+            TypeHelper.ConvertType("FrameGraphBuilder.InternalVirtualResource<?>"));
+    }
+
+    [Fact]
+    public void ConvertType_WithNestedBoundedWildcards_ShouldEraseInnermost()
+    {
+        Assert.Equal(
+            "Optional<PointFree<Func<object, object>>>",
+            TypeHelper.ConvertType("Optional<? extends PointFree<? extends Func<?, ?>>>"));
+    }
+
+    [Fact]
+    public void ConvertType_WithDottedBoundedWildcard_ShouldEraseBound()
+    {
+        Assert.Equal(
+            "Optic<Proof2, S, T, A, B>",
+            TypeHelper.ConvertType("Optic<? super Proof2, S, T, A, B>"));
     }
 
     [Fact]
@@ -143,5 +167,65 @@ public class ConvertTypeTests
                                 """;
 
         Assert.Equal(expected.ReplaceLineEndings(), parsed.ReplaceLineEndings());
+    }
+
+    [Fact]
+    public void ConvertMethodWithBoundedTypeParameter_ShouldEmitGenericMethodWithConstraint()
+    {
+        const string javaCode = """
+                                public class Foo {
+                                    public <E extends Entity> int getPackedLightCoords(E entity, float partialTickTime) { return 0; }
+                                }
+                                """;
+        var options = new JavaConversionOptions
+        {
+            IncludeUsings = false,
+            IncludeNamespace = false,
+        };
+        var parsed = JavaToCSharpConverter.ConvertText(javaCode, options).ConvertedText ?? "";
+
+        Assert.Contains("getPackedLightCoords<E>(E entity, float partialTickTime)", parsed);
+        Assert.Contains("where E : Entity", parsed);
+        Assert.DoesNotContain("E extends Entity", parsed);
+    }
+
+    [Fact]
+    public void ConvertMethodWithWildcardBound_ShouldEraseWildcardInConstraint()
+    {
+        const string javaCode = """
+                                public class Foo {
+                                    public <S extends StateHolder<?, S>> void foo(S s) { }
+                                }
+                                """;
+        var options = new JavaConversionOptions
+        {
+            IncludeUsings = false,
+            IncludeNamespace = false,
+        };
+        var parsed = JavaToCSharpConverter.ConvertText(javaCode, options).ConvertedText ?? "";
+
+        Assert.Contains("void foo<S>(S s)", parsed);
+        Assert.Contains("where S : StateHolder<object, S>", parsed);
+        Assert.DoesNotContain("StateHolder<?, S>", parsed);
+    }
+
+    [Fact]
+    public void ConvertInterfaceMethodWithBoundedTypeParameter_ShouldEmitGenericMethodWithConstraint()
+    {
+        const string javaCode = """
+                                public interface Foo {
+                                    <T extends Bar> void baz(T t);
+                                }
+                                """;
+        var options = new JavaConversionOptions
+        {
+            IncludeUsings = false,
+            IncludeNamespace = false,
+        };
+        var parsed = JavaToCSharpConverter.ConvertText(javaCode, options).ConvertedText ?? "";
+
+        Assert.Contains("void baz<T>(T t)", parsed);
+        Assert.Contains("where T : Bar", parsed);
+        Assert.DoesNotContain("T extends Bar", parsed);
     }
 }

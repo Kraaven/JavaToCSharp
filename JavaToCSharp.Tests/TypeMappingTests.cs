@@ -541,7 +541,7 @@ public class TypeMappingTests
             """);
 
         var parsed = ConvertExpression("System.out", index);
-        Assert.Contains("// TODO(java-to-csharp): no safe mapping for java.lang.System.out", parsed);
+        Assert.Contains("/* TODO(java-to-csharp): no safe mapping for java.lang.System.out", parsed);
         Assert.Contains("System.out", parsed);
     }
 
@@ -632,7 +632,42 @@ public class TypeMappingTests
                             expression: "$0.Write($rest)"
             """);
 
-        Assert.Equal("Console.Write(\"%s %d\", name, 5)", ConvertExpression("System.out.printf(\"%s %d\", name, 5)", index));
+        Assert.Equal("Console.Write(\"{0} {1:D}\", name, 5)", ConvertExpression("System.out.printf(\"%s %d\", name, 5)", index));
+    }
+
+    [Fact]
+    public void Resolve_Template_NamedPlaceholder_ResolvesToReceiver()
+    {
+        var index = TypeMappingIndex.LoadFromYaml("""
+            class_map:
+              - java_class: org.slf4j.LoggerFactory
+                csharp_class: LoggerFactory
+                entries:
+                  - java_member: getLogger
+                    arg_count: 1
+                    kind: template
+                    expression: "$FACTORY.CreateLogger($1)"
+            """);
+
+        Assert.Equal("LoggerFactory.CreateLogger(\"cat\")", ConvertExpression("LoggerFactory.getLogger(\"cat\")", index));
+    }
+
+    [Fact]
+    public void Resolve_Template_NamedPlaceholder_WithUnderscore_ResolvesToReceiver()
+    {
+        var index = TypeMappingIndex.LoadFromYaml("""
+            class_map:
+              - java_class: com.example.Msal
+                csharp_class: Msal
+                entries:
+                  - java_member: acquireTokenByAuthorizationCode
+                    arg_count: 1
+                    kind: template
+                    expression: "await $0.AcquireTokenByAuthorizationCode($AUTH_CODE).ExecuteAsync()"
+            """);
+
+        Assert.Contains("AcquireTokenByAuthorizationCode(Msal).ExecuteAsync", ConvertExpression("Msal.acquireTokenByAuthorizationCode(code)", index));
+        Assert.DoesNotContain("$", ConvertExpression("Msal.acquireTokenByAuthorizationCode(code)", index));
     }
 
     [Fact]
@@ -715,7 +750,7 @@ public class TypeMappingTests
             }
             """, index);
 
-        Assert.Contains("// TODO(java-to-csharp): no safe mapping for java.lang.System.exit — Environment.Exit is an application-level decision.", parsed);
+        Assert.Contains("/* TODO(java-to-csharp): no safe mapping for java.lang.System.exit — Environment.Exit is an application-level decision.", parsed);
         Assert.Contains("System.exit(1)", parsed);
     }
 
@@ -733,7 +768,7 @@ public class TypeMappingTests
             """);
 
         var parsed = Convert("public class Foo { void f() { System.exit(1); } }", index);
-        Assert.Contains("// TODO(java-to-csharp): no safe mapping for java.lang.System.exit", parsed);
+        Assert.Contains("/* TODO(java-to-csharp): no safe mapping for java.lang.System.exit", parsed);
     }
 
     [Fact]
@@ -742,7 +777,7 @@ public class TypeMappingTests
         var index = TypeMappingIndex.LoadFromYaml(BasicYaml);
         var parsed = Convert("public class Foo { double d = Math.random(); }", index);
 
-        Assert.Contains("// REVIEW(java-to-csharp): medium confidence", parsed);
+        Assert.Contains("/* REVIEW(java-to-csharp): medium confidence -", parsed);
         Assert.Contains("new Random().NextDouble()", parsed);
     }
 
@@ -775,7 +810,7 @@ public class TypeMappingTests
             """);
 
         var parsed = ConvertExpression("Reader.read(x)", index);
-        Assert.Contains("// TODO(java-to-csharp)", parsed);
+        Assert.Contains("/* TODO(java-to-csharp)", parsed);
         Assert.Contains("Reader.read(x)", parsed);
     }
 
@@ -918,5 +953,796 @@ public class TypeMappingTests
 
         Assert.Equal("Math.Abs(5)", ConvertExpression("Math.abs(5)", index, preserve: true));
         Assert.Equal("Math.Abs(5)", ConvertExpression("Math.abs(5)", index, preserve: false));
+    }
+
+    // ---------- Reverse member index ----------
+
+    [Fact]
+    public void FindClassesByMember_SingleMatch_ReturnsCandidate()
+    {
+        var index = TypeMappingIndex.LoadFromYaml("""
+            namespaces:
+              - java_packages: [java.lang]
+                csharp_packages: [System]
+
+            class_map:
+              - java_class: java.lang.StringBuilder
+                csharp_class: StringBuilder
+                entries:
+                  - java_member: append
+                    arg_count: variadic
+                    kind: rename
+                    csharp_member: Append
+              - java_class: java.lang.Math
+                csharp_class: Math
+                entries:
+                  - java_member: abs
+                    arg_count: 1
+                    kind: rename
+                    csharp_member: Abs
+            """);
+
+        var candidates = index.FindClassesByMember("append");
+        Assert.Single(candidates);
+        Assert.Equal("java.lang.StringBuilder", candidates[0].OwnerClass);
+    }
+
+    [Fact]
+    public void FindClassesByMember_MultipleMatches_ReturnsAll()
+    {
+        var index = TypeMappingIndex.LoadFromYaml("""
+            class_map:
+              - java_class: java.lang.StringBuilder
+                csharp_class: StringBuilder
+                entries:
+                  - java_member: toString
+                    arg_count: 0
+                    kind: rename
+                    csharp_member: ToString
+              - java_class: java.lang.Object
+                csharp_class: object
+                entries:
+                  - java_member: toString
+                    arg_count: 0
+                    kind: rename
+                    csharp_member: ToString
+            """);
+
+        var candidates = index.FindClassesByMember("toString");
+        Assert.Equal(2, candidates.Count);
+    }
+
+    [Fact]
+    public void FindClassesByMember_FilterByActivePackages()
+    {
+        var index = TypeMappingIndex.LoadFromYaml("""
+            namespaces:
+              - java_packages: [java.lang]
+                csharp_packages: [System]
+              - java_packages: [com.example]
+                csharp_packages: [Example]
+
+            class_map:
+              - java_class: java.lang.StringBuilder
+                csharp_class: StringBuilder
+                entries:
+                  - java_member: append
+                    arg_count: variadic
+                    kind: rename
+                    csharp_member: Append
+              - java_class: com.example.CustomBuilder
+                csharp_class: CustomBuilder
+                entries:
+                  - java_member: append
+                    arg_count: variadic
+                    kind: rename
+                    csharp_member: Append
+            """);
+
+        // Without filter: both match
+        var all = index.FindClassesByMember("append");
+        Assert.Equal(2, all.Count);
+
+        // With filter: only java.lang match
+        var filtered = index.FindClassesByMember("append", new HashSet<string> { "java.lang" });
+        Assert.Single(filtered);
+        Assert.Equal("java.lang.StringBuilder", filtered[0].OwnerClass);
+    }
+
+    [Fact]
+    public void FindClassesByMember_NoMatch_ReturnsEmpty()
+    {
+        var index = TypeMappingIndex.LoadFromYaml(BasicYaml);
+        var candidates = index.FindClassesByMember("nonExistentMethod");
+        Assert.Empty(candidates);
+    }
+
+    // ---------- Heuristic type inference ----------
+
+    [Fact]
+    public void Heuristic_InferTypeFromUniqueMethod_MapsCall()
+    {
+        // "append" only exists in StringBuilder → unique match
+        var index = TypeMappingIndex.LoadFromYaml("""
+            namespaces:
+              - java_packages: [java.lang]
+                csharp_packages: [System]
+
+            class_map:
+              - java_class: java.lang.StringBuilder
+                csharp_class: StringBuilder
+                entries:
+                  - java_member: append
+                    arg_count: variadic
+                    kind: rename
+                    csharp_member: Append
+            """);
+
+        // Chain ["unknown", "append"] — "unknown" is not in the index or variable tracker
+        // Heuristic sees "append" → unique match is StringBuilder → resolves
+        var parsed = Convert("""
+            public class Foo {
+                void f() {
+                    unknown.append("x");
+                }
+            }
+            """, index, preserve: false);
+
+        Assert.Contains("unknown.Append(\"x\")", parsed);
+    }
+
+    [Fact]
+    public void Heuristic_AmbiguousMethod_FallsThrough()
+    {
+        // "toString" exists in multiple classes → ambiguous → falls through to default
+        var index = TypeMappingIndex.LoadFromYaml("""
+            namespaces:
+              - java_packages: [java.lang]
+                csharp_packages: [System]
+
+            class_map:
+              - java_class: java.lang.StringBuilder
+                csharp_class: StringBuilder
+                entries:
+                  - java_member: toString
+                    arg_count: 0
+                    kind: rename
+                    csharp_member: ToString
+              - java_class: java.lang.Object
+                csharp_class: object
+                entries:
+                  - java_member: toString
+                    arg_count: 0
+                    kind: rename
+                    csharp_member: ToString
+            """);
+
+        var parsed = Convert("""
+            public class Foo {
+                void f() {
+                    unknown.toString();
+                }
+            }
+            """, index, preserve: false);
+
+        // Falls through to default: capitalize → ToString()
+        Assert.Contains("unknown.ToString()", parsed);
+    }
+
+    [Fact]
+    public void Heuristic_FieldAccess_ChainWithUnknownRoot()
+    {
+        // A.sb.append("x") where A is not in the index
+        // "append" is unique to StringBuilder → infer A.sb is StringBuilder
+        var index = TypeMappingIndex.LoadFromYaml("""
+            namespaces:
+              - java_packages: [java.lang]
+                csharp_packages: [System]
+
+            class_map:
+              - java_class: java.lang.StringBuilder
+                csharp_class: StringBuilder
+                entries:
+                  - java_member: append
+                    arg_count: variadic
+                    kind: rename
+                    csharp_member: Append
+            """);
+
+        var parsed = Convert("""
+            public class Foo {
+                void f() {
+                    A.sb.append("x");
+                }
+            }
+            """, index, preserve: false);
+
+        Assert.Contains("A.sb.Append(\"x\")", parsed);
+    }
+
+    [Fact]
+    public void Heuristic_UnsupportedEntry_ExcludedFromCandidates()
+    {
+        // "close" is unsupported in StringBuilder → excluded from reverse index
+        // The heuristic can't resolve it → falls through to default conversion
+        // which maps "close" → "Dispose" via ReplaceCommonMethodNames
+        var index = TypeMappingIndex.LoadFromYaml("""
+            namespaces:
+              - java_packages: [java.lang]
+                csharp_packages: [System]
+
+            class_map:
+              - java_class: java.lang.StringBuilder
+                csharp_class: StringBuilder
+                entries:
+                  - java_member: append
+                    arg_count: variadic
+                    kind: rename
+                    csharp_member: Append
+                  - java_member: close
+                    arg_count: 0
+                    kind: unsupported
+            """);
+
+        var parsed = Convert("""
+            public class Foo {
+                void f() {
+                    unknown.close();
+                }
+            }
+            """, index, preserve: false);
+
+        // "close" is unsupported → heuristic can't resolve → default conversion → "Dispose" (hardcoded)
+        Assert.Contains("unknown.Dispose()", parsed);
+    }
+
+    // ---------- Import-based class name resolution ----------
+
+    [Fact]
+    public void ImportBased_ResolveImportedClassName()
+    {
+        var index = TypeMappingIndex.LoadFromYaml("""
+            namespaces:
+              - java_packages: [java.lang]
+                csharp_packages: [System]
+
+            class_map:
+              - java_class: java.lang.StringBuilder
+                csharp_class: StringBuilder
+                entries:
+                  - java_member: append
+                    arg_count: variadic
+                    kind: rename
+                    csharp_member: Append
+            """);
+
+        // StringBuilder is auto-imported via java.lang.* → TryResolveClassName should find it
+        var parsed = Convert("""
+            import java.lang.StringBuilder;
+            public class Foo {
+                void f() {
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("x");
+                }
+            }
+            """, index, preserve: false);
+
+        Assert.Contains("sb.Append(\"x\")", parsed);
+    }
+
+    // ---------- Feature 4: Chain resolution with intermediate method calls ----------
+
+    [Fact]
+    public void ChainedCall_VariableScope_ReNamesOuterCall()
+    {
+        // sb.append("x").deleteCharAt(3) — sb is a StringBuilder
+        // ChainExtractor returns null (intermediate MethodCallExpr), so the
+        // MethodCallExpressionVisitor's chained-casing path kicks in:
+        // walks to root "sb", finds StringBuilder, renames deleteCharAt → Remove.
+        var index = TypeMappingIndex.LoadFromYaml("""
+            namespaces:
+              - java_packages: [java.lang]
+                csharp_packages: [System]
+
+            class_map:
+              - java_class: java.lang.StringBuilder
+                csharp_class: StringBuilder
+                entries:
+                  - java_member: append
+                    arg_count: variadic
+                    kind: rename
+                    csharp_member: Append
+                  - java_member: deleteCharAt
+                    arg_count: 1
+                    kind: rename
+                    csharp_member: Remove
+            """);
+
+        var parsed = Convert("""
+            public class Foo {
+                void f() {
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("x").deleteCharAt(3);
+                }
+            }
+            """, index, preserve: false);
+
+        Assert.Contains("Append", parsed);
+        Assert.Contains("Remove", parsed);
+    }
+
+    [Fact]
+    public void ChainedCall_BareMethodCallRoot_DefaultCapitalizes()
+    {
+        // getMap().get("key").toString() — root is a bare method call
+        // ChainExtractor returns null (intermediate MethodCallExpr).
+        // The chained-casing path walks to "getMap" but TryGetVariableType fails.
+        // Falls through to default: capitalize all method names.
+        var index = TypeMappingIndex.LoadFromYaml("""
+            namespaces:
+              - java_packages: [java.util, java.lang]
+                csharp_packages: [System.Collections.Generic, System]
+
+            class_map:
+              - java_class: java.util.Map
+                csharp_class: Dictionary
+                entries:
+                  - java_member: get
+                    arg_count: 1
+                    kind: rename
+                    csharp_member: get_Item
+              - java_class: java.lang.Object
+                csharp_class: object
+                entries:
+                  - java_member: toString
+                    arg_count: 0
+                    kind: rename
+                    csharp_member: ToString
+            """);
+
+        var parsed = ConvertExpression("getMap().get(\"key\").toString()", index, preserve: false);
+
+        // Root is a bare method call → chained-casing can't resolve → default capitalization
+        Assert.Contains("ToString", parsed);
+        Assert.Contains("Get", parsed);
+        Assert.Contains("GetMap", parsed);
+    }
+
+    [Fact]
+    public void ChainedCall_FindRootReceiverName_BareMethodCall()
+    {
+        // Verify FindRootReceiverName returns method name for bare calls (not null)
+        var index = TypeMappingIndex.LoadFromYaml("""
+            namespaces:
+              - java_packages: [java.util]
+                csharp_packages: [System.Collections.Generic]
+
+            class_map:
+              - java_class: java.util.Map
+                csharp_class: Dictionary
+                entries:
+                  - java_member: get
+                    arg_count: 1
+                    kind: rename
+                    csharp_member: get_Item
+            """);
+
+        // getMap().get("key") — root is bare "getMap", chained-casing walks to "getMap"
+        // TryGetVariableType fails → falls through to default
+        var parsed = ConvertExpression("getMap().get(\"key\")", index, preserve: false);
+        Assert.Contains("GetMap", parsed);
+        Assert.Contains("Get", parsed);
+    }
+
+    [Fact]
+    public void ChainedCall_TemplateEntry_FillsTemplate()
+    {
+        // sb.random() where random is a template entry.
+        // The chained-casing path resolves random against StringBuilder's mapping.
+        var index = TypeMappingIndex.LoadFromYaml("""
+            namespaces:
+              - java_packages: [java.lang]
+                csharp_packages: [System]
+
+            class_map:
+              - java_class: java.lang.StringBuilder
+                csharp_class: StringBuilder
+                entries:
+                  - java_member: append
+                    arg_count: variadic
+                    kind: rename
+                    csharp_member: Append
+                  - java_member: random
+                    arg_count: 0
+                    kind: template
+                    expression: "new Random().NextDouble()"
+            """);
+
+        var parsed = Convert("""
+            public class Foo {
+                void f() {
+                    StringBuilder sb = new StringBuilder();
+                    double v = sb.random();
+                }
+            }
+            """, index, preserve: false);
+
+        Assert.Contains("new Random().NextDouble()", parsed);
+    }
+
+    [Fact]
+    public void ChainedCall_TemplateOnChain_FillsTemplateOnScope()
+    {
+        // sb.append("x").random() — append resolves as rename, random as template
+        var index = TypeMappingIndex.LoadFromYaml("""
+            namespaces:
+              - java_packages: [java.lang]
+                csharp_packages: [System]
+
+            class_map:
+              - java_class: java.lang.StringBuilder
+                csharp_class: StringBuilder
+                entries:
+                  - java_member: append
+                    arg_count: variadic
+                    kind: rename
+                    csharp_member: Append
+                  - java_member: random
+                    arg_count: 0
+                    kind: template
+                    expression: "new Random().NextDouble()"
+            """);
+
+        var parsed = Convert("""
+            public class Foo {
+                void f() {
+                    StringBuilder sb = new StringBuilder();
+                    double v = sb.append("x").random();
+                }
+            }
+            """, index, preserve: false);
+
+        Assert.Contains("new Random().NextDouble()", parsed);
+    }
+
+    // ---------- Feature 5: Constructor mapping ----------
+
+    [Fact]
+    public void ConstructorMapping_Rename_SimpleType()
+    {
+        var index = TypeMappingIndex.LoadFromYaml("""
+            namespaces:
+              - java_packages: [java.util]
+                csharp_packages: [System.Collections.Generic]
+
+            class_map:
+              - java_class: java.util.ArrayList
+                csharp_class: List
+                entries:
+                  - java_member: <init>
+                    member_type: constructor
+                    arg_count: 0
+                    kind: rename
+                    csharp_member: List
+            """);
+
+        var parsed = Convert("""
+            public class Foo {
+                void f() {
+                    var x = new ArrayList();
+                }
+            }
+            """, index, preserve: false);
+        Assert.Contains("new List()", parsed);
+    }
+
+    [Fact]
+    public void ConstructorMapping_Rename_WithArgs()
+    {
+        var index = TypeMappingIndex.LoadFromYaml("""
+            namespaces:
+              - java_packages: [java.util]
+                csharp_packages: [System.Collections.Generic]
+
+            class_map:
+              - java_class: java.util.ArrayList
+                csharp_class: List
+                entries:
+                  - java_member: <init>
+                    member_type: constructor
+                    arg_count: 1
+                    kind: rename
+                    csharp_member: List
+            """);
+
+        var parsed = Convert("""
+            public class Foo {
+                void f() {
+                    var x = new ArrayList(otherList);
+                }
+            }
+            """, index, preserve: false);
+        Assert.Contains("new List(otherList)", parsed);
+    }
+
+    [Fact]
+    public void ConstructorMapping_Template_RewritesArgs()
+    {
+        var index = TypeMappingIndex.LoadFromYaml("""
+            namespaces:
+              - java_packages: [java.util]
+                csharp_packages: [System.Collections.Generic]
+
+            class_map:
+              - java_class: java.util.HashMap
+                csharp_class: Dictionary
+                entries:
+                  - java_member: <init>
+                    member_type: constructor
+                    arg_count: 0
+                    kind: template
+                    expression: "new Dictionary<string, object>()"
+            """);
+
+        var parsed = Convert("""
+            public class Foo {
+                void f() {
+                    var x = new HashMap();
+                }
+            }
+            """, index, preserve: false);
+        Assert.Contains("new Dictionary<string, object>()", parsed);
+    }
+
+    [Fact]
+    public void ConstructorMapping_NoArgs_EmptyConstructor()
+    {
+        var index = TypeMappingIndex.LoadFromYaml("""
+            namespaces:
+              - java_packages: [java.util]
+                csharp_packages: [System.Collections.Generic]
+
+            class_map:
+              - java_class: java.util.ArrayList
+                csharp_class: List
+            """);
+
+        var parsed = Convert("""
+            public class Foo {
+                void f() {
+                    var x = new ArrayList();
+                }
+            }
+            """, index, preserve: false);
+        Assert.Contains("new List()", parsed);
+    }
+
+    [Fact]
+    public void ConstructorMapping_ArityDisambiguation()
+    {
+        var index = TypeMappingIndex.LoadFromYaml("""
+            namespaces:
+              - java_packages: [java.util]
+                csharp_packages: [System.Collections.Generic]
+
+            class_map:
+              - java_class: java.util.ArrayList
+                csharp_class: List
+                entries:
+                  - java_member: <init>
+                    member_type: constructor
+                    arg_count: 0
+                    kind: template
+                    expression: "new List<string>()"
+                  - java_member: <init>
+                    member_type: constructor
+                    arg_count: 1
+                    kind: rename
+                    csharp_member: List
+            """);
+
+        var parsed0 = Convert("""
+            public class Foo {
+                void f() {
+                    var x = new ArrayList();
+                }
+            }
+            """, index, preserve: false);
+        Assert.Contains("new List<string>()", parsed0);
+
+        var parsed1 = Convert("""
+            public class Foo {
+                void f() {
+                    var x = new ArrayList(other);
+                }
+            }
+            """, index, preserve: false);
+        Assert.Contains("new List(other)", parsed1);
+    }
+
+    // ---------- Feature 5: returns_type chain resolution ----------
+
+    [Fact]
+    public void ChainedCall_GenericType_ResolvesFromFollowOnMember()
+    {
+        // env.lookup("srv").host() — lookup returns GenericType (any class). The converter
+        // looks at the follow-on member "host" to infer the returned type is Server (the only
+        // mapped class with a host member) and resolves host() against it.
+        var index = TypeMappingIndex.LoadFromYaml("""
+            namespaces:
+              - java_packages: [com.example]
+                csharp_packages: [Example]
+
+            class_map:
+              - java_class: com.example.Environment
+                csharp_class: Environment
+                entries:
+                  - java_member: lookup
+                    arg_count: 1
+                    kind: template
+                    expression: "$0.Lookup($1)"
+                    returns_type: GenericType
+              - java_class: com.example.Server
+                csharp_class: Server
+                entries:
+                  - java_member: host
+                    arg_count: 0
+                    kind: rename
+                    csharp_member: Host
+              - java_class: com.example.Port
+                csharp_class: Port
+                entries:
+                  - java_member: portNumber
+                    arg_count: 0
+                    kind: rename
+                    csharp_member: PortNumber
+            """);
+
+        var parsed = Convert("""
+            public class Foo {
+                void f(com.example.Environment env) {
+                    String s = env.lookup("srv").host();
+                }
+            }
+            """, index, preserve: false);
+
+        Assert.Contains("env.Lookup(\"srv\").Host", parsed);
+    }
+
+    [Fact]
+    public void ChainedCall_GenericType_AmbiguousFollowOnMember_FallsThrough()
+    {
+        // Both Server and Port have a "value" member, so the GenericType look-ahead cannot
+        // infer a unique receiver type and falls through to default conversion.
+        var index = TypeMappingIndex.LoadFromYaml("""
+            namespaces:
+              - java_packages: [com.example]
+                csharp_packages: [Example]
+
+            class_map:
+              - java_class: com.example.Environment
+                csharp_class: Environment
+                entries:
+                  - java_member: lookup
+                    arg_count: 1
+                    kind: template
+                    expression: "$0.Lookup($1)"
+                    returns_type: GenericType
+              - java_class: com.example.Server
+                csharp_class: Server
+                entries:
+                  - java_member: value
+                    arg_count: 0
+                    kind: rename
+                    csharp_member: Value
+              - java_class: com.example.Port
+                csharp_class: Port
+                entries:
+                  - java_member: value
+                    arg_count: 0
+                    kind: rename
+                    csharp_member: Value
+            """);
+
+        var parsed = Convert("""
+            public class Foo {
+                void f(com.example.Environment env) {
+                    String s = env.lookup("srv").value();
+                }
+            }
+            """, index, preserve: false);
+
+        Assert.Contains("env.Lookup(\"srv\").Value()", parsed);
+    }
+
+    [Fact]
+    public void ChainedCall_ReturnsType_ResolvesFromMethodEntry()
+    {
+        // Pattern.compile("x").matcher("y").find() — compile's returns_type tells resolver
+        // that compile returns java.util.regex.Pattern, so matcher resolves against Pattern,
+        // and matcher's returns_type resolves find against Matcher.
+        var index = TypeMappingIndex.LoadFromYaml("""
+            namespaces:
+              - java_packages: [java.util.regex]
+                csharp_packages: [System.Text.RegularExpressions]
+
+            class_map:
+              - java_class: java.util.regex.Pattern
+                csharp_class: Regex
+                entries:
+                  - java_member: compile
+                    arg_count: 1
+                    kind: template
+                    expression: "new Regex($1)"
+                    returns_type: java.util.regex.Pattern
+                  - java_member: matcher
+                    arg_count: 1
+                    kind: template
+                    expression: "$0.Match($1)"
+                    returns_type: java.util.regex.Matcher
+              - java_class: java.util.regex.Matcher
+                csharp_class: Match
+                entries:
+                  - java_member: find
+                    arg_count: 0
+                    kind: rename
+                    csharp_member: NextMatch
+            """);
+
+        var parsed = ConvertExpression("Pattern.compile(\"x\").matcher(\"y\").find()", index, preserve: false);
+
+        // Should resolve find() against Match → NextMatch
+        Assert.Contains("NextMatch", parsed);
+    }
+
+    [Fact]
+    public void ChainedCall_ReturnsType_VariableScopeStillWorks()
+    {
+        // Variable-scoped chain still works with returns_type present
+        var index = TypeMappingIndex.LoadFromYaml("""
+            namespaces:
+              - java_packages: [java.util.regex]
+                csharp_packages: [System.Text.RegularExpressions]
+
+            class_map:
+              - java_class: java.util.regex.Pattern
+                csharp_class: Regex
+                entries:
+                  - java_member: compile
+                    arg_count: 1
+                    kind: template
+                    expression: "new Regex($1)"
+                    returns_type: java.util.regex.Pattern
+                  - java_member: matcher
+                    arg_count: 1
+                    kind: template
+                    expression: "$0.Match($1)"
+                    returns_type: java.util.regex.Matcher
+              - java_class: java.util.regex.Matcher
+                csharp_class: Match
+                entries:
+                  - java_member: find
+                    arg_count: 0
+                    kind: rename
+                    csharp_member: NextMatch
+                  - java_member: matches
+                    arg_count: 0
+                    kind: property
+                    csharp_member: Success
+            """);
+
+        var parsed = Convert("""
+            public class Foo {
+                void f() {
+                    Pattern p = Pattern.compile("x");
+                    Matcher m = p.matcher("y");
+                    boolean b = m.find();
+                    boolean c = m.matches();
+                }
+            }
+            """, index, preserve: false);
+
+        Assert.Contains("NextMatch", parsed);
+        Assert.Contains("Success", parsed);
     }
 }

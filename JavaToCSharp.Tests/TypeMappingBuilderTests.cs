@@ -92,7 +92,7 @@ public class TypeMappingBuilderTests
         var index = MathIndex();
         var parsed = Convert("public class Foo { double d = Math.random(); }", index);
 
-        Assert.Contains("// REVIEW(java-to-csharp): medium confidence", parsed);
+        Assert.Contains("/* REVIEW(java-to-csharp): medium confidence -", parsed);
         Assert.Contains("new Random().NextDouble()", parsed);
     }
 
@@ -123,7 +123,7 @@ public class TypeMappingBuilderTests
                         .TemplateVariadic("printf", "$0.Write($rest)"))))
             .Build();
 
-        Assert.Equal("Console.Write(\"%s %d\", name, 5)", ConvertExpression("System.out.printf(\"%s %d\", name, 5)", index));
+        Assert.Equal("Console.Write(\"{0} {1:D}\", name, 5)", ConvertExpression("System.out.printf(\"%s %d\", name, 5)", index));
     }
 
     [Fact]

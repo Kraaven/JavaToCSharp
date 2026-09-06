@@ -495,4 +495,225 @@ public class BuiltInMappingTests
         Assert.Contains("sb.Remove(3, 1)", parsed);
         Assert.DoesNotContain("sb.Remove(3)", parsed);
     }
+
+    // ---------- Chained-call resolution via returns_type ----------
+
+    [Fact]
+    public void StringBuilderSpec_ChainedAppendDelete_ResolvesAcrossEntries()
+    {
+        var index = BuiltInMappings.SystemText;
+        var parsed = Convert("public class Foo { void f(StringBuilder sb) { sb.append(\"a\").append(\"b\").deleteCharAt(2).toString(); } }", index);
+
+        Assert.Contains("sb.Append(\"a\").Append(\"b\").Remove(2, 1)", parsed);
+        Assert.Contains(".ToString()", parsed);
+    }
+
+    [Fact]
+    public void TimeSpec_LocalDateChain_DayOffsetThenYear()
+    {
+        var index = BuiltInMappings.Load(BuiltInMappingSpec.SystemTime);
+        var parsed = Convert("import java.time.LocalDate; public class Foo { int f() { return LocalDate.now().plusDays(1).getYear(); } }", index);
+
+        Assert.Contains("DateTime.Today.AddDays(1).Year", parsed);
+    }
+
+    [Fact]
+    public void TimeSpec_LocalDateAtStartOfDay_ReturnsDateTime()
+    {
+        var index = BuiltInMappings.Load(BuiltInMappingSpec.SystemTime);
+        var parsed = Convert("import java.time.LocalDate; public class Foo { void f() { DateTime dt = LocalDate.now().atStartOfDay(); } }", index);
+
+        Assert.Contains("DateTime.Today.Date", parsed);
+    }
+
+    [Fact]
+    public void RegexSpec_PatternCompileMatcher_ResolvesBothHops()
+    {
+        var index = BuiltInMappings.Load(BuiltInMappingSpec.SystemTextRegularExpressions);
+        var parsed = Convert("import java.util.regex.Pattern; public class Foo { boolean f() { return Pattern.compile(\"x\").matcher(\"y\").matches(); } }", index);
+
+        Assert.Contains("new Regex(\"x\").Match(\"y\").Success", parsed);
+    }
+
+    [Fact]
+    public void RegexSpec_PatternCompileMatcherFind_ResolvesToNextMatch()
+    {
+        var index = BuiltInMappings.Load(BuiltInMappingSpec.SystemTextRegularExpressions);
+        var parsed = Convert("import java.util.regex.Pattern; public class Foo { boolean f() { return Pattern.compile(\"x\").matcher(\"y\").find(); } }", index);
+
+        Assert.Contains("new Regex(\"x\").Match(\"y\").NextMatch", parsed);
+    }
+
+    [Fact]
+    public void IOSpec_PathsGetChained_ResolvesToFileAndFullPath()
+    {
+        var index = BuiltInMappings.SystemIO;
+        var parsed = Convert("import java.nio.file.Paths; public class Foo { void f() { Path p = Paths.get(\"a\", \"b\").toAbsolutePath(); File f2 = Paths.get(\"a\", \"b\").toFile(); } }", index);
+
+        Assert.Contains("Path.GetFullPath(Path.Combine(\"a\", \"b\"))", parsed);
+        Assert.Contains("new File(Path.Combine(\"a\", \"b\"))", parsed);
+        Assert.DoesNotContain("ToFile()", parsed);
+        Assert.DoesNotContain("ToAbsolutePath()", parsed);
+    }
+
+    // ---------- Concrete collection classes mirror interface members ----------
+
+    [Fact]
+    public void CollectionsSpec_HashMapGetPut_UseIndexer()
+    {
+        var index = BuiltInMappings.SystemCollections;
+        var parsed = Convert("public class Foo { void f() { HashMap m = new HashMap(); m.put(\"k\", \"v\"); Object v = m.get(\"k\"); } }", index);
+
+        Assert.Contains("m[\"k\"] = \"v\"", parsed);
+        Assert.Contains("v = m[\"k\"]", parsed);
+        Assert.DoesNotContain("m.Get(", parsed);
+    }
+
+    [Fact]
+    public void CollectionsSpec_ArrayListGetSize_UseIndexerAndCount()
+    {
+        var index = BuiltInMappings.SystemCollections;
+        var parsed = Convert("public class Foo { void f() { ArrayList list = new ArrayList(); list.add(\"x\"); Object o = list.get(0); int n = list.size(); } }", index);
+
+        Assert.Contains("list.Add(\"x\")", parsed);
+        Assert.Contains("o = list[0]", parsed);
+        Assert.Contains("n = list.Count", parsed);
+    }
+
+    [Fact]
+    public void CollectionsSpec_HashSetAddContains_Resolve()
+    {
+        var index = BuiltInMappings.SystemCollections;
+        var parsed = Convert("public class Foo { void f() { HashSet set = new HashSet(); set.add(\"x\"); boolean c = set.contains(\"x\"); } }", index);
+
+        Assert.Contains("set.Add(\"x\")", parsed);
+        Assert.Contains("set.Contains(\"x\")", parsed);
+    }
+
+    [Fact]
+    public void CollectionsSpec_LinkedListGet_UsesElementAt()
+    {
+        var index = BuiltInMappings.SystemCollections;
+        var parsed = Convert("public class Foo { Object f(LinkedList list) { return list.get(0); } }", index);
+
+        Assert.Contains("list.ElementAt(0)", parsed);
+    }
+
+    [Fact]
+    public void CollectionsSpec_ListIteratorNext_ResolvesCurrent()
+    {
+        var index = BuiltInMappings.SystemCollections;
+        var parsed = Convert("public class Foo { Object f(ArrayList list) { return list.iterator().next(); } }", index);
+
+        Assert.Contains("list.GetEnumerator().Current", parsed);
+    }
+
+    [Fact]
+    public void CollectionsSpec_ArraysAsListSize_ResolvesCount()
+    {
+        var index = BuiltInMappings.SystemCollections;
+        var parsed = Convert("import java.util.Arrays; public class Foo { int f() { return Arrays.asList(1, 2, 3).size(); } }", index);
+
+        Assert.Contains("new List<object>", parsed);
+        Assert.Contains(".Count", parsed);
+        Assert.DoesNotContain(".Count()", parsed);
+    }
+
+    [Fact]
+    public void CollectionsSpec_MapGetFollowOn_GenericTypeResolves()
+    {
+        var index = BuiltInMappings.Load(BuiltInMappingSpec.SystemCollections, BuiltInMappingSpec.SystemTime);
+        var parsed = Convert("import java.util.HashMap; import java.time.LocalDate; public class Foo { int f() { HashMap m = new HashMap(); return m.get(\"d\").getDayOfYear(); } }", index);
+
+        Assert.Contains("m[\"d\"].DayOfYear", parsed);
+    }
+
+    // ---------- Sibling classes ----------
+
+    [Fact]
+    public void CollectionsSpec_Random_MapsToSystemRandom()
+    {
+        var index = BuiltInMappings.SystemCollections;
+        var parsed = Convert("public class Foo { void f() { Random r = new Random(); int i = r.nextInt(10); long l = r.nextLong(); boolean b = r.nextBoolean(); } }", index);
+
+        Assert.Contains("r.Next(10)", parsed);
+        Assert.Contains("r.NextInt64()", parsed);
+        Assert.Contains("r.Next(2) == 0", parsed);
+    }
+
+    [Fact]
+    public void CollectionsSpec_UUID_MapsToGuid()
+    {
+        var index = BuiltInMappings.SystemCollections;
+        var parsed = Convert("import java.util.UUID; public class Foo { void f() { UUID u = UUID.randomUUID(); UUID p = UUID.fromString(\"00000000-0000-0000-0000-000000000000\"); String s = u.toString(); } }", index);
+
+        Assert.Contains("Guid.NewGuid()", parsed);
+        Assert.Contains("Guid.Parse(\"00000000-0000-0000-0000-000000000000\")", parsed);
+        Assert.Contains("s = u.ToString()", parsed);
+    }
+
+    [Fact]
+    public void CollectionsSpec_StackAndPriorityQueue_MappedEntries()
+    {
+        var index = BuiltInMappings.SystemCollections;
+        var parsed = Convert("public class Foo { Object f() { Stack s = new Stack(); s.push(\"x\"); PriorityQueue q = new PriorityQueue(); q.offer(\"y\"); return s.pop(); } }", index);
+
+        Assert.Contains("s.Push(\"x\")", parsed);
+        Assert.Contains("q.Enqueue(\"y\")", parsed);
+        Assert.Contains("s.Pop()", parsed);
+    }
+
+    // ---------- Numerics returns_type ----------
+
+    [Fact]
+    public void NumericsSpec_BigIntegerValueOfAdd_Resolves()
+    {
+        var index = BuiltInMappings.Load(BuiltInMappingSpec.SystemNumerics);
+        var parsed = Convert("import java.math.BigInteger; public class Foo { void f() { BigInteger a = BigInteger.valueOf(5).add(BigInteger.valueOf(3)); String s = a.toString(); } }", index);
+
+        Assert.Contains("new BigInteger(5) + new BigInteger(3)", parsed);
+        Assert.DoesNotContain(".Add(", parsed);
+        Assert.Contains("a.ToString()", parsed);
+    }
+
+    [Fact]
+    public void NumericsSpec_BigDecimalValueOfAdd_Resolves()
+    {
+        var index = BuiltInMappings.Load(BuiltInMappingSpec.SystemNumerics);
+        var parsed = Convert("import java.math.BigDecimal; public class Foo { void f() { BigDecimal a = BigDecimal.valueOf(10).add(BigDecimal.valueOf(5)); } }", index);
+
+        Assert.Contains("new decimal (10) + new decimal (5)", parsed);
+        Assert.DoesNotContain(".Add(", parsed);
+    }
+
+    // ---------- Threading returns_type ----------
+
+    [Fact]
+    public void ThreadingSpec_CurrentThreadGetName_ResolvesToProperty()
+    {
+        var index = BuiltInMappings.SystemThreading;
+        var parsed = Convert("public class Foo { void f() { String n = Thread.currentThread().getName(); } }", index);
+
+        Assert.Contains("System.Threading.Thread.CurrentThread.Name", parsed);
+    }
+
+    [Fact]
+    public void ThreadingSpec_CompletableFutureGet_ResolvesResult()
+    {
+        var index = BuiltInMappings.SystemThreading;
+        var parsed = Convert("import java.util.concurrent.CompletableFuture; public class Foo { void f() { CompletableFuture<String> cf = CompletableFuture.supplyAsync(() -> \"x\"); String s = cf.get(); } }", index);
+
+        Assert.Contains("Task.Run(() => \"x\")", parsed);
+        Assert.Contains("cf.Result", parsed);
+    }
+
+    [Fact]
+    public void IOSpec_StringWriterToString_HasReturnsType()
+    {
+        var index = BuiltInMappings.SystemIO;
+        var parsed = Convert("public class Foo { String f() { StringWriter w = new StringWriter(); w.write(\"hi\"); return w.toString(); } }", index);
+
+        Assert.Contains("w.Write(\"hi\")", parsed);
+        Assert.Contains("w.ToString()", parsed);
+    }
 }

@@ -124,8 +124,75 @@ public class Consumer {
             IncludeComments = false,
         }).ConvertedText ?? "";
 
-        Assert.Contains("BlockPos.of()", parsed);
-        Assert.DoesNotContain("BlockPos.Of()", parsed);
+        // Unbound method references now convert to a receiver-parameter lambda; the assertion
+        // checks the Java casing of the referenced method is preserved.
+        Assert.Contains(".of()", parsed);
+        Assert.DoesNotContain(".Of()", parsed);
+    }
+
+    [Fact]
+    public void ConstructorMethodReference_CreatesConstructorLambda()
+    {
+        const string java = """
+public class Foo {
+    public Foo(int value) {
+    }
+}
+
+public class Bar {
+    public static java.util.function.Function<Integer, Foo> factory() {
+        return Foo::new;
+    }
+}
+""";
+
+        var parsed = JavaToCSharpConverter.ConvertText(java, new JavaConversionOptions
+        {
+            IncludeComments = false,
+        }).ConvertedText ?? "";
+
+        Assert.Contains("() => new Foo()", parsed);
+        Assert.DoesNotContain(".new()", parsed);
+    }
+
+    [Fact]
+    public void ArrayConstructorMethodReference_CreatesEmptyArrayLambda()
+    {
+        const string java = """
+public class Foo {
+    public static java.util.function.IntFunction<Foo[]> factory() {
+        return Foo[]::new;
+    }
+}
+""";
+
+        var parsed = JavaToCSharpConverter.ConvertText(java, new JavaConversionOptions
+        {
+            IncludeComments = false,
+        }).ConvertedText ?? "";
+
+        Assert.Contains("() => new Foo[0]", parsed);
+        Assert.DoesNotContain(".new()", parsed);
+    }
+
+    [Fact]
+    public void GenericArrayConstructorMethodReference_CreatesEmptyArrayLambda()
+    {
+        const string java = """
+public class Foo<T> {
+    public static java.util.function.IntFunction<T[]> factory() {
+        return T[]::new;
+    }
+}
+""";
+
+        var parsed = JavaToCSharpConverter.ConvertText(java, new JavaConversionOptions
+        {
+            IncludeComments = false,
+        }).ConvertedText ?? "";
+
+        Assert.Contains("() => new T[0]", parsed);
+        Assert.DoesNotContain(".new()", parsed);
     }
 
     [Fact]
