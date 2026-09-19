@@ -32,30 +32,39 @@ public static class UsingsHelper
             // outer like com.mojang.datafixers.DSL.TypeReference has no mapping row of its own).
             if (!isStatic && importName.IndexOf('.') != lastPartStartIndex && lastPartStartIndex > 0)
             {
-                var nestedSegments = importName[(importName.LastIndexOf('.', lastPartStartIndex - 1) + 1)..];
-                var nestedLeaf = importName[(lastPartStartIndex + 1)..];
-
-                if (TypeMapping.TypeMappingResolver.TryMapTypeLeafName(context, nestedSegments, out var mappedNested))
-                {
-                    usings.Add(MakeAliasUsing(context, import, nestedLeaf, mappedNested));
-                    continue;
-                }
-
                 var outerTailStart = importName.LastIndexOf('.', lastPartStartIndex - 1);
-                var outerName = importName[(outerTailStart + 1)..lastPartStartIndex];
 
-                // Tree-typed outer (e.g. com.mojang.datafixers.DSL.TypeReference has no dotted
-                // mapping row of its own): alias to the outer type's known namespace. JDK
-                // nested imports (java.util.Map.Entry) have no tree declaration and fall
-                // through unchanged.
-                if (context.Options.KnownTypeNamespaces is { Count: > 0 } known
-                    && known.TryGetValue(outerName.ToLowerInvariant(), out var outerNamespace)
-                    && !string.IsNullOrWhiteSpace(outerNamespace))
+                // Only a genuinely nested-type import takes this branch: the segment before the
+                // leaf must start a class name (java.util.Map.Entry → outer "Map"). A flat
+                // package import (java.util.List → outer segment "util", lowercase) must fall
+                // through to the package-row mapping path below — aliasing it to a tree type
+                // that merely shares the package segment's name (Util) is a misfire.
+                if (outerTailStart >= 0 && char.IsUpper(importName[outerTailStart + 1]))
                 {
-                    var aliasTarget = outerNamespace + "." + TypeHelper.Capitalize(nestedLeaf);
+                    var nestedSegments = importName[(outerTailStart + 1)..];
+                    var nestedLeaf = importName[(lastPartStartIndex + 1)..];
 
-                    usings.Add(MakeAliasUsing(context, import, nestedLeaf, aliasTarget));
-                    continue;
+                    if (TypeMapping.TypeMappingResolver.TryMapTypeLeafName(context, nestedSegments, out var mappedNested))
+                    {
+                        usings.Add(MakeAliasUsing(context, import, nestedLeaf, mappedNested));
+                        continue;
+                    }
+
+                    var outerName = importName[(outerTailStart + 1)..lastPartStartIndex];
+
+                    // Tree-typed outer (e.g. com.mojang.datafixers.DSL.TypeReference has no dotted
+                    // mapping row of its own): alias to the outer type's known namespace. JDK
+                    // nested imports (java.util.Map.Entry) have no tree declaration and fall
+                    // through unchanged.
+                    if (context.Options.KnownTypeNamespaces is { Count: > 0 } known
+                        && known.TryGetValue(outerName.ToLowerInvariant(), out var outerNamespace)
+                        && !string.IsNullOrWhiteSpace(outerNamespace))
+                    {
+                        var aliasTarget = outerNamespace + "." + TypeHelper.Capitalize(nestedLeaf);
+
+                        usings.Add(MakeAliasUsing(context, import, nestedLeaf, aliasTarget));
+                        continue;
+                    }
                 }
             }
 
