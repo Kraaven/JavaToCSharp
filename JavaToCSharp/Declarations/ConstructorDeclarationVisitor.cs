@@ -52,7 +52,7 @@ public class ConstructorDeclarationVisitor : BodyDeclarationVisitor<ConstructorD
                 }
                 else
                 {
-                    paramSyntax = paramSyntax.WithType(SyntaxFactory.ParseTypeName(TypeHelper.ConvertTypeOf(context, param)));
+                    paramSyntax = paramSyntax.WithType(TypeHelper.ConvertTypeSyntax(context, param.getType(), param.getType().getArrayLevel()));
                 }
 
                 paramSyntaxes.Add(paramSyntax);

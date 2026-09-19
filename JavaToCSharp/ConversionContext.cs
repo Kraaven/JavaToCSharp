@@ -45,6 +45,87 @@ public class ConversionContext(
 
     public string NextTempName(string prefix) => $"{prefix}{++_tempCounter}";
 
+    private int _placeholderCounter;
+
+    /// <summary>
+    /// Stand-in types synthesized by the constraint satisfier, tagged with the type they must
+    /// nest in. C# name lookup walks outward through enclosing class scopes, so a placeholder
+    /// nested in ANY ancestor of the reference site resolves — but a class's own base list can
+    /// NOT see the class's own nested types, so a placeholder synthesized for a base-list
+    /// wildcard must nest one level up. Drained owner-filtered alongside
+    /// <see cref="PendingAnonymousTypes"/>.
+    /// </summary>
+    public Queue<(string? Owner, ClassDeclarationSyntax Declaration)> PendingPlaceholderTypes { get; } = new();
+
+    /// <summary>
+    /// The type declaration currently being converted (innermost). Used as the owner key for
+    /// placeholder deduplication: the same unsatisfiable constraint referenced twice within one
+    /// type yields one nested stand-in, while sibling types each get their own copy (a bare
+    /// name registered in one nested type is not visible to its siblings).
+    /// </summary>
+    public string? CurrentPlaceholderOwner { get; set; }
+
+    /// <summary>
+    /// Placeholder names carry the file's root type name: multiple converted files in the same
+    /// namespace each drain unowned (namespace-level) stand-ins, and a bare counter resets per
+    /// file, so identical names would collide (CS0101). References and the declaration both use
+    /// the returned name, so the suffix is transparent.
+    /// </summary>
+    public string NextPlaceholderName()
+    {
+        var suffix = RootTypeName is { Length: > 0 } root
+            ? "_" + root.Replace('.', '_')
+            : "";
+
+        return $"__Satisfy{++_placeholderCounter}{suffix}";
+    }
+
+    /// <summary>
+    /// Registers a synthesized constraint-satisfying nested class, deduplicating by the
+    /// (owner, closed base-list) signature. Returns the type's name.
+    /// </summary>
+    public string RegisterPlaceholderType(string closedBaseList, Func<string, ClassDeclarationSyntax> factory)
+    {
+        var key = (CurrentPlaceholderOwner ?? "") + "|" + closedBaseList;
+
+        if (PlaceholderSignatures.TryGetValue(key, out var existing))
+        {
+            return existing;
+        }
+
+        var name = NextPlaceholderName();
+        PlaceholderSignatures[key] = name;
+        PendingPlaceholderTypes.Enqueue((CurrentPlaceholderOwner, factory(name)));
+        return name;
+    }
+
+    public IDictionary<string, string> PlaceholderSignatures { get; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Drains pending placeholder classes owned by <paramref name="ownerName"/> (the type whose
+    /// members are currently being collected). Placeholders owned by other types stay queued —
+    /// they drain into their own owner when its visitor loop runs, or one level up when they
+    /// were synthesized for an owner's base list.
+    /// </summary>
+    public void DrainPlaceholderTypes(string? ownerName, Action<ClassDeclarationSyntax> addMember)
+    {
+        var passes = PendingPlaceholderTypes.Count;
+
+        for (var i = 0; i < passes; i++)
+        {
+            var (owner, declaration) = PendingPlaceholderTypes.Dequeue();
+
+            if (string.Equals(owner, ownerName, StringComparison.Ordinal))
+            {
+                addMember(declaration);
+            }
+            else
+            {
+                PendingPlaceholderTypes.Enqueue((owner, declaration));
+            }
+        }
+    }
+
     public List<StatementSyntax> DrainPendingStatements()
     {
         if (PendingStatements.Count == 0)
@@ -77,6 +158,15 @@ public class ConversionContext(
     public IList<string> TypeParameterNames { get; } = new List<string>();
 
     /// <summary>
+    /// The Java AST nodes of the currently enclosing type's type parameters (same order as
+    /// <see cref="TypeParameterNames"/>). Used when hoisting anonymous classes so they can be
+    /// made generic over the enclosing parameters they reference — Java anonymous bodies see
+    /// the enclosing type's parameters, while C# nested classes do not.
+    /// </summary>
+    public IList<com.github.javaparser.ast.type.TypeParameter> TypeParameterNodes { get; } =
+        new List<com.github.javaparser.ast.type.TypeParameter>();
+
+    /// <summary>
     /// Names of Java record components for the record currently being converted.
     /// Used to avoid emitting <c>override</c> on component accessor methods.
     /// </summary>
@@ -102,6 +192,30 @@ public class ConversionContext(
     public bool PreserveJavaMethodNames => Options.PreserveJavaMethodNames || IsConvertingRecord || IsConvertingEnum;
 
     /// <summary>
+    /// When true, we are converting members of an interface reshaped into an abstract class;
+    /// bodyless interface methods become virtual members with REVIEW throw-stub bodies.
+    /// </summary>
+    public bool IsConvertingReshapedInterface { get; set; }
+
+    /// <summary>
+    /// Member names (lowercased) of reshaped interfaces implemented by the type currently being
+    /// converted (cumulative across enclosing types — nested types inherit their bases). A
+    /// method whose name is in this set flips from interface-suppression to `override`, so
+    /// virtual dispatch reaches the implementer instead of the throw-stub base member.
+    /// </summary>
+    public ISet<string> CurrentReshapeOverrideMembers { get; } = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Member names (lowercased) of NON-reshaped (interface-form) bases implemented by the type
+    /// currently being converted (cumulative across enclosing types). C# forbids `override` on
+    /// interface implementations, so a method whose name is in this set must not claim `override`
+    /// — implicit implementation satisfies the contract. Scoped to the type's own bases: a
+    /// tree-wide name set wrongly suppressed class-method overrides that merely shared a name
+    /// with some unrelated interface member (run/codec/getType/fix hiding abstract base members).
+    /// </summary>
+    public ISet<string> CurrentImplementedInterfaceMembers { get; } = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
     /// C# namespaces collected while resolving member access through the mapping set.
     /// Merged into the output usings, sorted alphabetically and deduplicated.
     /// </summary>
@@ -111,6 +225,16 @@ public class ConversionContext(
     /// Maps record component names to private backing field names (e.g. name → name_attribute).
     /// </summary>
     public IDictionary<string, string> RecordComponentBackingFields { get; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Maps field names to their deconflicted replacements when a Java type declares a field and
+    /// a method with the same name (legal in Java, CS0102 in C#). The field is renamed by
+    /// appending "Field"; its declaration and references (bare, or <c>this.</c>-qualified) are
+    /// rewritten through this map, while the method keeps its name so cross-file callers are
+    /// unaffected. Populated per type by a member pre-scan.
+    /// </summary>
+    public IDictionary<string, string> FieldNameRenames { get; } =
         new Dictionary<string, string>(StringComparer.Ordinal);
 
     /// <summary>

@@ -1,4 +1,4 @@
-﻿using com.github.javaparser.ast.expr;
+using com.github.javaparser.ast.expr;
 using JavaToCSharp.TypeMapping;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -220,7 +220,7 @@ public class MethodCallExpressionVisitor : ExpressionVisitor<MethodCallExpr>
         }
 
         var typeArgSyntaxes = typeArgs
-            .Select(t => SyntaxFactory.ParseTypeName(TypeHelper.ConvertType(context, t.toString())))
+            .Select(t => TypeHelper.ConvertTypeSyntax(context, t, 0))
             .ToArray();
 
         return SyntaxFactory.GenericName(TypeHelper.EscapeMemberName(methodName))
@@ -322,3 +322,4 @@ public class MethodCallExpressionVisitor : ExpressionVisitor<MethodCallExpr>
         return candidates.Count == 1 ? candidates[0].Key : null;
     }
 }
+

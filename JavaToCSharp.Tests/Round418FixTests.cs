@@ -154,6 +154,6 @@ public class Round418FixTests
 
         Assert.Contains("new Double(", result);
         Assert.DoesNotContain("new double", result);
-        Assert.Contains("Double<String> make", result);
+        Assert.Contains("Double<string> make", result);
     }
 }

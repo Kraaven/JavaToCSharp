@@ -344,10 +344,10 @@ public sealed partial class TypeMappingIndex
                 $"Mapping file '{sourceName}' is invalid: {ownerPath} requires a valid 'java_class' (a dotted Java type name).");
         }
 
-        if (string.IsNullOrWhiteSpace(dto.CSharpClass) || !IsValidIdentifier(dto.CSharpClass))
+        if (string.IsNullOrWhiteSpace(dto.CSharpClass) || !IsValidCSharpClassTarget(dto.CSharpClass))
         {
             throw new MappingValidationException(
-                $"Mapping file '{sourceName}' is invalid: {ownerPath} requires a valid 'csharp_class' (a bare C# type name).");
+                $"Mapping file '{sourceName}' is invalid: {ownerPath} requires a valid 'csharp_class' (a bare C# type name, a nested qualified name with outer arguments like Holder<object>.Reference, or a $N placeholder template like Dictionary<long, $1>).");
         }
 
         var kind = ParseClassKind(sourceName, ownerPath, dto.Kind);
@@ -362,6 +362,7 @@ public sealed partial class TypeMappingIndex
                 IsGeneric = dto.Generic ?? false,
                 Kind = kind,
                 MatchQualifiedOnly = dto.MatchQualifiedOnly ?? false,
+                ImportResolvable = dto.ImportResolvable ?? false,
             };
             classes.Add(dto.JavaClass, cls);
         }
@@ -369,6 +370,10 @@ public sealed partial class TypeMappingIndex
         {
             throw new MappingValidationException(
                 $"class_map '{dto.JavaClass}' is defined in both '{cls.SourceFile}' and '{sourceName}' with different csharp_class values ('{cls.CSharpClass}' vs '{dto.CSharpClass}').");
+        }
+        else if (dto.ImportResolvable == true)
+        {
+            cls.ImportResolvable = true;
         }
 
         if (dto.Entries is null)
@@ -459,7 +464,8 @@ public sealed partial class TypeMappingIndex
             confidence,
             dto.Notes,
             nestedClassNames,
-            dto.ReturnsType);
+            dto.ReturnsType,
+            dto.Static == true);
     }
 
     private static MemberMappingType ParseMemberType(string sourceName, string path, string? raw)
@@ -632,7 +638,8 @@ public sealed partial class TypeMappingIndex
                 member.Confidence,
                 member.Notes,
                 nested,
-                member.ReturnsType));
+                member.ReturnsType,
+                member.IsStatic));
         }
 
         var result = new ClassMapping(
@@ -642,7 +649,8 @@ public sealed partial class TypeMappingIndex
             cls.IsGeneric,
             cls.Kind,
             cls.MatchQualifiedOnly,
-            members.AsReadOnly());
+            members.AsReadOnly(),
+            cls.ImportResolvable);
 
         cache[name] = result;
         inProgress.Remove(name);
@@ -653,6 +661,25 @@ public sealed partial class TypeMappingIndex
     private static partial Regex IdentifierRegex();
 
     private static bool IsValidIdentifier(string value) => IdentifierRegex().IsMatch(value);
+
+    /// <summary>
+    /// A csharp_class target may be a bare identifier, a nested qualified name whose segments
+    /// optionally carry type arguments (<c>Holder&lt;object&gt;.Reference</c>), or a template
+    /// with positional <c>$N</c> placeholders (<c>Dictionary&lt;long, $1&gt;</c>). Nesting inside
+    /// argument lists is accepted structurally; balanced-bracket validation happens at expansion.
+    /// </summary>
+    private static bool IsValidCSharpClassTarget(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return CSharpClassTargetRegex().IsMatch(value);
+    }
+
+    [GeneratedRegex(@"^[A-Za-z_][A-Za-z0-9_]*(<[A-Za-z0-9_$,\s.<>\[\]]+>)?(\.[A-Za-z_][A-Za-z0-9_]*(<[A-Za-z0-9_$,\s.<>\[\]]+>)?)*$")]
+    private static partial Regex CSharpClassTargetRegex();
 
     private static bool IsValidJavaClass(string value) =>
         value.Split('.').All(IsValidIdentifier);
@@ -670,6 +697,8 @@ public sealed partial class TypeMappingIndex
         public ClassMappingKind Kind { get; init; }
 
         public bool MatchQualifiedOnly { get; init; }
+
+        public bool ImportResolvable { get; set; }
 
         public List<PendingMember> PendingMembers { get; } = [];
     }
@@ -690,7 +719,8 @@ public sealed partial class TypeMappingIndex
             MappingConfidence confidence,
             string? notes,
             List<string> nestedClassNames,
-            string? returnsType)
+            string? returnsType,
+            bool isStatic = false)
         {
             SourceFile = sourceFile;
             OwnerClass = ownerClass;
@@ -706,6 +736,7 @@ public sealed partial class TypeMappingIndex
             Notes = notes;
             NestedClassNames = nestedClassNames;
             ReturnsType = returnsType;
+            IsStatic = isStatic;
         }
 
         public string SourceFile { get; }
@@ -735,6 +766,8 @@ public sealed partial class TypeMappingIndex
         public List<string> NestedClassNames { get; }
 
         public string? ReturnsType { get; }
+
+        public bool IsStatic { get; }
 
         public string ArgCountText =>
             MemberType == MemberMappingType.Field ? "n/a"

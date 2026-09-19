@@ -34,6 +34,23 @@ internal static class ModifierHelper
     }
 
     /// <summary>
+    /// Replaces a private modifier token with public (CS0107 forbids the pair). Java allows a
+    /// private nested type in a public member signature (erasure hides it); C# rejects the
+    /// combination (CS0050/CS0051) — promote, as with package-private and protected.
+    /// </summary>
+    public static T ReplacePrivateWithPublic<T>(T syntax) where T : MemberDeclarationSyntax
+    {
+        var privateToken = syntax.Modifiers.FirstOrDefault(t => t.IsKind(SyntaxKind.PrivateKeyword));
+
+        if (privateToken == default)
+        {
+            return syntax;
+        }
+
+        return (T)syntax.WithModifiers(syntax.Modifiers.Replace(privateToken, SyntaxFactory.Token(SyntaxKind.PublicKeyword)));
+    }
+
+    /// <summary>
     /// Adds static, abstract, final/sealed, and volatile modifiers based on the given Java modifier set.
     /// </summary>
     public static T AddNonAccessModifiers<T>(T syntax, ISet<Modifier.Keyword> mods,
@@ -84,5 +101,23 @@ internal static class ModifierHelper
         }
 
         return syntax;
+    }
+
+    /// <summary>
+    /// Replaces an existing C# <c>protected</c> modifier with <c>public</c> (nested type
+    /// promotion). Adding <c>public</c> alongside <c>protected</c> is illegal C# (CS0107,
+    /// "more than one protection modifier"), so the original token must be substituted.
+    /// Returns the syntax unchanged when no <c>protected</c> token is present.
+    /// </summary>
+    public static T ReplaceProtectedWithPublic<T>(T syntax) where T : MemberDeclarationSyntax
+    {
+        var protectedToken = syntax.Modifiers.FirstOrDefault(t => t.IsKind(SyntaxKind.ProtectedKeyword));
+
+        if (protectedToken == default)
+        {
+            return syntax;
+        }
+
+        return (T)syntax.WithModifiers(syntax.Modifiers.Replace(protectedToken, SyntaxFactory.Token(SyntaxKind.PublicKeyword)));
     }
 }

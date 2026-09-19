@@ -18,11 +18,14 @@ public class CastExpressionVisitor : ExpressionVisitor<CastExpr>
         var type = TypeHelper.ConvertTypeOf(context, castExpr);
 
         // Java intersection types in cast position, (A & B)value, have no C# equivalent. Emit the
-        // first (least-derived) type only; the value already holds a compatible instance at runtime.
-        int intersection = type.IndexOf(" & ", StringComparison.Ordinal);
+        // first (least-derived) type only; the value already holds a compatible instance at
+        // runtime. Cut at the FIRST ampersand regardless of surrounding whitespace: the type
+        // string may be rendered compactly (A<B>&C) or spaced (A<B> & C) depending on the path
+        // that produced it.
+        int intersection = type.IndexOf('&');
         if (intersection >= 0)
         {
-            type = type[..intersection];
+            type = type[..intersection].TrimEnd();
         }
 
         // A lambda directly under a cast, (T)(a, b) => body, is ambiguous for the C# parser and the

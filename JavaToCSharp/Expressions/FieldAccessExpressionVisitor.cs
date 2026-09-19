@@ -38,6 +38,14 @@ public class FieldAccessExpressionVisitor : ExpressionVisitor<FieldAccessExpr>
             field = backingField;
         }
 
+        // Deconflicted field references: only rewrite this.-qualified accesses (obj.-qualified
+        // accesses may refer to a same-named field of a different type that was not renamed).
+        if (fieldAccessExpr.getScope() is ThisExpr
+            && context.FieldNameRenames.TryGetValue(field, out string? renamedField))
+        {
+            field = renamedField;
+        }
+
         field = context.Options.PreserveJavaMethodNames
             ? field
             : TypeHelper.ReplaceCommonFieldNames(field);

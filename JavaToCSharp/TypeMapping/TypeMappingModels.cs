@@ -77,7 +77,8 @@ public sealed class ClassMapping
         bool isGeneric,
         ClassMappingKind kind,
         bool matchQualifiedOnly,
-        IReadOnlyList<MemberMapping> entries)
+        IReadOnlyList<MemberMapping> entries,
+        bool importResolvable = false)
     {
         SourceFile = sourceFile;
         JavaClass = javaClass;
@@ -86,6 +87,7 @@ public sealed class ClassMapping
         Kind = kind;
         MatchQualifiedOnly = matchQualifiedOnly;
         Entries = entries;
+        ImportResolvable = importResolvable;
     }
 
     public string SourceFile { get; }
@@ -106,6 +108,14 @@ public sealed class ClassMapping
     /// Use for placeholder classes whose simple name collides with unrelated target types.
     /// </summary>
     public bool MatchQualifiedOnly { get; }
+
+    /// <summary>
+    /// When true, a bare simple name that the file's import map binds to this class's FQN
+    /// resolves through it (single-type imports of nested types). Lets generated nested-type
+    /// rows be both <see cref="MatchQualifiedOnly"/> (no simple-name hijack) and reachable
+    /// from imported bare references.
+    /// </summary>
+    public bool ImportResolvable { get; }
 
     public IReadOnlyList<MemberMapping> Entries { get; }
 
@@ -134,7 +144,8 @@ public sealed class MemberMapping
         MappingConfidence confidence,
         string? notes,
         IReadOnlyList<ClassMapping> classMap,
-        string? returnsType)
+        string? returnsType,
+        bool isStatic = false)
     {
         SourceFile = sourceFile;
         OwnerClass = ownerClass;
@@ -150,6 +161,7 @@ public sealed class MemberMapping
         Notes = notes;
         ClassMap = classMap;
         ReturnsType = returnsType;
+        IsStatic = isStatic;
     }
 
     public string SourceFile { get; }
@@ -190,6 +202,13 @@ public sealed class MemberMapping
     /// chained calls when the variable's declared type is not available.
     /// </summary>
     public string? ReturnsType { get; }
+
+    /// <summary>
+    /// True when the mapped Java member is declared static in the mapping set. Method
+    /// references to static members emit a parameterless-receiver lambda; instance members
+    /// emit a receiver-as-first-argument lambda.
+    /// </summary>
+    public bool IsStatic { get; }
 
     /// <summary>
     /// The unique lookup key for a member entry. Type-hint entries share a key only when

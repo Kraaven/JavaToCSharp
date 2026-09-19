@@ -34,6 +34,15 @@ internal sealed class ClassMappingDto
     [YamlMember(Alias = "match_qualified_only")]
     public bool? MatchQualifiedOnly { get; set; }
 
+    /// <summary>
+    /// True when a bare simple name imported via a single-type import should resolve to this
+    /// class through the import map (nested-type rewrite rows). Independent of
+    /// MatchQualifiedOnly: that flag blocks simple-name lookup, this re-enables the
+    /// import-disambiguated path only.
+    /// </summary>
+    [YamlMember(Alias = "import_resolvable")]
+    public bool? ImportResolvable { get; set; }
+
     public List<MemberMappingDto>? Entries { get; set; }
 }
 
@@ -62,6 +71,14 @@ internal sealed class MemberMappingDto
 
     [YamlMember(Alias = "returns_type")]
     public string? ReturnsType { get; set; }
+
+    /// <summary>
+    /// True when the Java member is static. Lets the method-reference emitter choose the
+    /// static-style lambda shape (<c>Type::method</c> → <c>x => Type.Method(x)</c>) without
+    /// heuristics.
+    /// </summary>
+    [YamlMember(Alias = "static")]
+    public bool? Static { get; set; }
 
     public List<ClassMappingDto>? ClassMap { get; set; }
 }

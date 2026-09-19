@@ -248,6 +248,16 @@ public static partial class JavaToCSharpConverter
             }
         }
 
+        // Base-list stand-ins registered by TOP-LEVEL types have a null owner: a C# class's
+        // base clause cannot see its own nested types, so the stand-in must live outside the
+        // deriving type — at namespace level here. Owned placeholders were already drained
+        // into their owning types' member loops.
+        while (context.PendingPlaceholderTypes.Count > 0)
+        {
+            var (_, leftoverDeclaration) = context.PendingPlaceholderTypes.Dequeue();
+            rootMembers.Add(leftoverDeclaration.NormalizeWhitespace().WithTrailingNewLines());
+        }
+
         if (namespaceNameSyntax is not null)
         {
             if (options.UseFileScopedNamespaces && rootMembers.Count > 0)

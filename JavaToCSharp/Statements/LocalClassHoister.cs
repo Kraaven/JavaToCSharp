@@ -176,9 +176,29 @@ internal static class LocalClassHoister
         }
 
         // 5. Augment constructors so captures are received and stored.
-        var enclosingTypeName = enclosingTypes.Count > 0
-            ? TypeHelper.ConvertType(context, enclosingTypes[0].getNameAsString())
+        var enclosingFirst = enclosingTypes.Count > 0 ? enclosingTypes[0] : null;
+        var enclosingTypeName = enclosingFirst is not null
+            ? TypeHelper.ConvertType(context, enclosingFirst.getNameAsString(), synthesizeRawArguments: false)
             : "object";
+
+        // The enclosing instance carries the enclosing type's own type parameters
+        // (`Sorter.this` inside `class Sorter<T>` is Sorter<T>) — a raw spelling of a generic
+        // type is CS0305 in the hoisted class. The hoisted class is already generic over the
+        // same parameters (the hoister copies referenced ones), so spell them out.
+        if (enclosingTypeName is not null && enclosingFirst is not null)
+        {
+            var enclosingParams = enclosingFirst is ClassOrInterfaceDeclaration enclosingDecl
+                ? enclosingDecl.getTypeParameters().ToList<com.github.javaparser.ast.type.TypeParameter>() ?? []
+                : [];
+            if (enclosingTypeName.IndexOf('<') < 0 && enclosingParams is { Count: > 0 })
+            {
+                enclosingTypeName += "<" + string.Join(", ", enclosingParams.Select(p => p.getNameAsString())) + ">";
+            }
+        }
+        else
+        {
+            enclosingTypeName = "object";
+        }
 
         var captureParameters = new List<ParameterSyntax>();
         var captureAssignments = new List<StatementSyntax>();

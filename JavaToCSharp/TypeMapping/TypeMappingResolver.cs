@@ -510,6 +510,122 @@ public static class TypeMappingResolver
     }
 
     /// <summary>
+    /// Resolves a single (possibly dotted) Java type NAME through the mapping index and returns
+    /// its C# class target VERBATIM - <c>$N</c> placeholders are NOT expanded. Used by the
+    /// structural type-syntax builder, which consumes the placeholders itself with the reference's
+    /// own Java type arguments (raw usage falls back to <c>object</c> there). Unmapped names
+    /// return false so the caller can run the normal dictionary fallback.
+    /// </summary>
+    internal static bool TryMapTypeLeafName(ConversionContext context, string javaTypeName, out string mappedName)
+    {
+        mappedName = javaTypeName;
+
+        if (context.Options.MappingIndex is not { } index)
+        {
+            return false;
+        }
+
+        if (!TryResolveIndexedType(context, javaTypeName, out var cls, out var ambiguous) || cls is null || ambiguous)
+        {
+            return false;
+        }
+
+        CollectUsings(context, [cls], 0);
+        mappedName = AdjustNestedTypeReference(context, cls.CSharpClass, cls);
+        return true;
+    }
+
+    /// <summary>
+    /// Adjusts a mapped NESTED-type reference ("Outer.Inner") when the outer type is generic —
+    /// C# forbids accessing a nested type of an UNBOUND generic type (CS0305). Only applies to
+    /// generated dynamic rows (import-resolvable), whose targets are qualified
+    /// <c>Root.Nested</c> rewrites — static mapping targets are never rewritten. The shared
+    /// adjustment logic (bare name in-file, constraint-satisfied closure otherwise) lives in
+    /// <see cref="TypeHelper.AdjustNestedGenericReference"/>.
+    /// </summary>
+    internal static string AdjustNestedTypeReference(ConversionContext context, string csharpName, ClassMapping cls)
+    {
+        if (!cls.ImportResolvable)
+        {
+            return csharpName;
+        }
+
+        return TypeHelper.AdjustNestedGenericReference(context, csharpName);
+    }
+
+    /// <summary>
+    /// Resolves a (possibly dotted) Java type name through the mapping index, with an
+    /// import-aware disambiguation for bare simple names: a single-type import of a NESTED type
+    /// (<c>import com.mojang.serialization.DataResult.Error</c> referenced as bare <c>Error</c>)
+    /// must win over same-named top-level mapped types (java.lang.Error) that the ambiguous
+    /// simple-name fallback would otherwise pick. Uses only the file's own imports — local
+    /// inference, deterministic per file.
+    /// </summary>
+    private static bool TryResolveIndexedType(
+        ConversionContext context,
+        string javaTypeName,
+        out ClassMapping? cls,
+        out bool ambiguous)
+    {
+        var index = context.Options.MappingIndex!;
+
+        if (index.TryGetByDottedName(javaTypeName, out cls, out ambiguous))
+        {
+            return true;
+        }
+
+        if (!javaTypeName.Contains('.')
+            && context.FileMappingContext is { } fileCtx
+            && fileCtx.TryResolveClassName(javaTypeName, out var importedFqn)
+            && importedFqn is not null
+            && ResolveImportedFqn(index, importedFqn, out var importedCls)
+            && importedCls is not null
+            // Only rows that explicitly opted into import-based resolution (generated
+            // nested-type rewrites). Placeholder rows flagged match_qualified_only stay
+            // inert for bare references even when the file imports them.
+            && importedCls.ImportResolvable)
+        {
+            cls = importedCls;
+            ambiguous = false;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Resolves an imported fully-qualified name against the index. Dynamic nested-type rows
+    /// use SHORT dotted keys ("DSL.TypeReference"), so an FQN import of a nested type
+    /// (import com.mojang.datafixers.DSL.TypeReference) also resolves via its last two
+    /// segments.
+    /// </summary>
+    private static bool ResolveImportedFqn(
+        TypeMappingIndex index,
+        string importedFqn,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out ClassMapping? cls)
+    {
+        if (index.TryGetByQualifiedName(importedFqn, out cls))
+        {
+            return cls is not null;
+        }
+
+        var lastDot = importedFqn.LastIndexOf('.');
+
+        if (lastDot > 0)
+        {
+            var secondDot = importedFqn.LastIndexOf('.', lastDot - 1);
+
+            if (secondDot >= 0
+                && index.TryGetByDottedName(importedFqn[(secondDot + 1)..], out cls, out _))
+            {
+                return cls is not null;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Rewrites the dotted type names inside a raw Java type string (e.g. <c>Map.Entry&lt;String, Integer&gt;</c>)
     /// through the mapping index, substituting each matched class with its C# name and collecting the
     /// required usings. Names without a mapping (user types, primitives, wildcards) are left untouched.
@@ -523,7 +639,6 @@ public static class TypeMappingResolver
             converted = javaType;
             return false;
         }
-
         // Namespace-gated: skip if this file has no mapped packages
         var fileCtx = context.FileMappingContext;
         if (fileCtx is not null && !fileCtx.HasAnyMappedPackage)
@@ -536,17 +651,68 @@ public static class TypeMappingResolver
         converted = QualifiedTypeNameRegex.Replace(javaType, match =>
         {
             var name = match.Value;
-            if (!index.TryGetByDottedName(name, out var cls, out var ambiguous) || cls is null || ambiguous)
+            if (!TryResolveIndexedType(context, name, out var cls, out var ambiguous) || cls is null || ambiguous)
             {
                 return TypeHelper.ConvertType(name);
             }
 
             CollectUsings(context, [cls], 0);
             applied = true;
-            return cls.CSharpClass;
+            return AdjustNestedTypeReference(context, cls.CSharpClass, cls);
         });
 
+        if (applied && converted.Contains('$'))
+        {
+            converted = ExpandTrailingJavaArgsTemplate(converted);
+        }
+
         return applied;
+    }
+
+    /// <summary>
+    /// Expands a mapped class target's <c>$N</c> placeholders against the Java type arguments
+    /// that follow the substituted name in the type string
+    /// (<c>Long2ObjectMap&lt;V&gt;</c> → <c>Dictionary&lt;long, $1&gt;&lt;V&gt;</c> →
+    /// <c>Dictionary&lt;long, V&gt;</c>). Only top-level template groups are expanded; nested
+    /// occurrences fall through unchanged.
+    /// </summary>
+    private static string ExpandTrailingJavaArgsTemplate(string converted)
+    {
+        var open = 0;
+
+        while (open >= 0 && open < converted.Length)
+        {
+            open = converted.IndexOf('<', open);
+
+            if (open < 0 || !TypeHelper.TryFindMatchingAngleBracket(converted, open, out var close))
+            {
+                return converted;
+            }
+
+            if (!converted.Substring(open + 1, close - open - 1).Contains('$'))
+            {
+                open = close + 1;
+                continue;
+            }
+
+            var after = converted[(close + 1)..];
+            var javaArgs = new List<string>();
+
+            // Type strings rendered from Java AST nodes can carry whitespace before the
+            // argument group; the group must still be consumed as javaArgs.
+            var afterTrimmed = after.TrimStart();
+
+            if (afterTrimmed.StartsWith("<")
+                && TypeHelper.TryFindMatchingAngleBracket(afterTrimmed, 0, out var argsClose))
+            {
+                javaArgs.AddRange(TypeHelper.SplitTopLevelTypeArguments(afterTrimmed.Substring(1, argsClose - 1)));
+                after = afterTrimmed[(argsClose + 1)..];
+            }
+
+            return TypeHelper.ApplyClassTargetTemplate(converted[..(close + 1)], javaArgs) + after;
+        }
+
+        return converted;
     }
 
     private static (RootMatchResult Result, ClassMapping? Root, int Consumed) FindRoot(TypeMappingIndex index, List<string> segments)
@@ -974,7 +1140,12 @@ public static class TypeMappingResolver
                 continue;
             }
 
-            context.MappingUsings.Add(csharpPackages[0]);
+            // A row may map to several C# namespaces; register them all so every
+            // mapped type resolves (usings are deduplicated downstream).
+            foreach (var ns in csharpPackages)
+            {
+                context.MappingUsings.Add(ns);
+            }
         }
     }
 
@@ -1068,3 +1239,4 @@ public static class TypeMappingResolver
         return fragmentSyntax.WithLeadingTrivia(trivia);
     }
 }
+

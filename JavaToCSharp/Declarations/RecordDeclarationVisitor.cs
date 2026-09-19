@@ -105,10 +105,22 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
                     continue;
                 }
 
+                // Same filtering as GetTypeParameterListConstraints: a bound converting to bare
+                // `object` (e.g. java.lang.Enum) is CS0702, and a fully-filtered list must not
+                // emit an empty `where T :` skeleton (CS1031).
+                var constraints = bounds
+                    .Select(bound => TypeHelper.GetSyntaxFromType(context, bound))
+                    .Where(bound => bound.ToString().Trim() != "object")
+                    .Select(boundSyntax => SyntaxFactory.TypeConstraint(boundSyntax))
+                    .ToArray<TypeParameterConstraintSyntax>();
+
+                if (constraints.Length == 0)
+                {
+                    continue;
+                }
+
                 var constraint = SyntaxFactory.TypeParameterConstraintClause(typeParam.getNameAsString())
-                    .AddConstraints(bounds
-                        .Select(bound => SyntaxFactory.TypeConstraint(TypeHelper.GetSyntaxFromType(context, bound)))
-                        .ToArray<TypeParameterConstraintSyntax>());
+                    .AddConstraints(constraints);
 
                 classSyntax = classSyntax.AddConstraintClauses(constraint);
             }
@@ -117,6 +129,25 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
         var mods = recordDecl.getModifiers().ToModifierKeywordSet();
 
         classSyntax = ModifierHelper.AddAccessModifiers(classSyntax, mods);
+        if (ModifierHelper.IsPackagePrivate(mods))
+        {
+            // Java package-private records referenced by public members (or cross-file) are
+            // less accessible in C# (CS0050/CS0051) — promote to public.
+            classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword));
+        }
+        else if (mods.Contains(Modifier.Keyword.PRIVATE))
+        {
+            // Java allows a private nested record in a public member signature (erasure); C#
+            // rejects the combination — promote (replaces the private token, CS0107-safe).
+            classSyntax = ModifierHelper.ReplacePrivateWithPublic(classSyntax);
+        }
+        else if (mods.Contains(Modifier.Keyword.PROTECTED))
+        {
+            // Java protected nested types are reachable package-wide; C# protected restricts to
+            // subclasses, which breaks sibling-file references (CS0122) and public signatures
+            // (CS0050/CS0051). Promote to public — same rule as nested classes/enums.
+            classSyntax = ModifierHelper.ReplaceProtectedWithPublic(classSyntax);
+        }
 
         // Records are implicitly final
         classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.SealedKeyword));
@@ -128,6 +159,12 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
             classSyntax = classSyntax.AddBaseListTypes(
                 SyntaxFactory.SimpleBaseType(TypeHelper.GetSyntaxFromType(context, implement)));
         }
+
+        // Placeholders synthesized from here on belong to this record — the base list above was
+        // resolved BEFORE taking ownership (a C# base list cannot see the class's own nested
+        // types).
+        var previousPlaceholderOwner = context.CurrentPlaceholderOwner;
+        context.CurrentPlaceholderOwner = name;
 
         var components = recordDecl.getParameters().ToList<Parameter>() ?? [];
         var componentNames = components
@@ -282,6 +319,9 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
             {
                 nestedTypes.Add(context.PendingAnonymousTypes.Dequeue());
             }
+
+            context.DrainPlaceholderTypes(context.CurrentPlaceholderOwner,
+                placeholder => nestedTypes.Add(placeholder));
         }
 
         foreach (var field in staticAndOtherFields)
@@ -351,6 +391,8 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
             classSyntax = classSyntax.AddMembers(nested);
         }
 
+        context.CurrentPlaceholderOwner = previousPlaceholderOwner;
+
         return classSyntax.WithJavaComments(context, recordDecl);
     }
 
@@ -385,12 +427,12 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
 
     private static FieldDeclarationSyntax CreateComponentField(ConversionContext context, Parameter component)
     {
-        string typeName = TypeHelper.ConvertTypeOf(context, component);
+        var typeSyntax = TypeHelper.ConvertTypeSyntax(context, component.getType(), component.getType().getArrayLevel());
         string identifier = TypeHelper.EscapeIdentifier(GetStorageName(component.getNameAsString()));
 
         return SyntaxFactory.FieldDeclaration(
                 SyntaxFactory.VariableDeclaration(
-                    SyntaxFactory.ParseTypeName(typeName),
+                    typeSyntax,
                     SyntaxFactory.SingletonSeparatedList(
                         SyntaxFactory.VariableDeclarator(identifier))))
             .AddModifiers(
@@ -400,13 +442,13 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
 
     private static MethodDeclarationSyntax CreateDefaultAccessor(ConversionContext context, Parameter component)
     {
-        string typeName = TypeHelper.ConvertTypeOf(context, component);
+        var typeSyntax = TypeHelper.ConvertTypeSyntax(context, component.getType(), component.getType().getArrayLevel());
         string componentName = component.getNameAsString();
         string storageName = TypeHelper.EscapeIdentifier(GetStorageName(componentName));
         string methodName = TypeHelper.EscapeIdentifier(componentName);
 
         return SyntaxFactory.MethodDeclaration(
-                SyntaxFactory.ParseTypeName(typeName),
+                typeSyntax,
                 methodName)
             .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword))
             .WithExpressionBody(
@@ -428,11 +470,11 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
             string componentName = component.getNameAsString();
             string paramName = TypeHelper.EscapeIdentifier(componentName);
             string storageName = TypeHelper.EscapeIdentifier(GetStorageName(componentName));
-            string typeName = TypeHelper.ConvertTypeOf(context, component);
+            var typeSyntax = TypeHelper.ConvertTypeSyntax(context, component.getType(), component.getType().getArrayLevel());
 
             parameters.Add(
                 SyntaxFactory.Parameter(SyntaxFactory.Identifier(paramName))
-                    .WithType(SyntaxFactory.ParseTypeName(typeName))
+                    .WithType(typeSyntax)
                     .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.OutKeyword))));
 
             body.Add(
@@ -469,7 +511,7 @@ public class RecordDeclarationVisitor : BodyDeclarationVisitor<RecordDeclaration
             string paramName = TypeHelper.EscapeIdentifier(component.getNameAsString());
             paramSyntaxes.Add(
                 SyntaxFactory.Parameter(SyntaxFactory.Identifier(paramName))
-                    .WithType(SyntaxFactory.ParseTypeName(TypeHelper.ConvertTypeOf(context, component))));
+                    .WithType(TypeHelper.ConvertTypeSyntax(context, component.getType(), component.getType().getArrayLevel())));
         }
 
         if (paramSyntaxes.Count > 0)

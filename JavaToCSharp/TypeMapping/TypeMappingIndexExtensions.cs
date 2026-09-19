@@ -23,10 +23,11 @@ public static class TypeMappingIndexExtensions
     {
         var builder = new TypeMappingBuilder();
 
-        // Re-add namespace mappings (flattened dictionary form)
+        // Re-add namespace mappings (flattened dictionary form), preserving
+        // every mapped C# namespace - not just the first.
         foreach (var (javaPackage, csharpPackages) in index.NamespaceMappings)
         {
-            builder.AddNamespace(javaPackage, csharpPackages[0]);
+            builder.AddNamespace([javaPackage], csharpPackages);
         }
 
         // Re-add class mappings with their members
@@ -37,6 +38,7 @@ public static class TypeMappingIndexExtensions
                 c.SetGeneric(cls.IsGeneric);
                 c.SetKind(cls.Kind);
                 c.SetMatchQualifiedOnly(cls.MatchQualifiedOnly);
+                c.SetImportResolvable(cls.ImportResolvable);
 
                 foreach (var entry in cls.Entries)
                 {
@@ -92,6 +94,11 @@ public static class TypeMappingIndexExtensions
             case MemberMappingKind.Unsupported:
                 c.Unsupported(entry.JavaMember, entry.ArgCount, entry.Confidence, entry.Notes);
                 break;
+        }
+
+        if (entry.IsStatic)
+        {
+            c.MarkStatic(entry.JavaMember);
         }
 
         // Re-add nested class mappings (routing nodes)

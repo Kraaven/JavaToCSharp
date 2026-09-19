@@ -1433,7 +1433,7 @@ public class TypeMappingTests
                 }
             }
             """, index, preserve: false);
-        Assert.Contains("new List()", parsed);
+        Assert.Contains("new List<object>()", parsed);
     }
 
     [Fact]
@@ -1462,7 +1462,7 @@ public class TypeMappingTests
                 }
             }
             """, index, preserve: false);
-        Assert.Contains("new List(otherList)", parsed);
+        Assert.Contains("new List<object>(otherList)", parsed);
     }
 
     [Fact]
@@ -1514,7 +1514,7 @@ public class TypeMappingTests
                 }
             }
             """, index, preserve: false);
-        Assert.Contains("new List()", parsed);
+        Assert.Contains("new List<object>()", parsed);
     }
 
     [Fact]
@@ -1557,7 +1557,7 @@ public class TypeMappingTests
                 }
             }
             """, index, preserve: false);
-        Assert.Contains("new List(other)", parsed1);
+        Assert.Contains("new List<object>(other)", parsed1);
     }
 
     // ---------- Feature 5: returns_type chain resolution ----------

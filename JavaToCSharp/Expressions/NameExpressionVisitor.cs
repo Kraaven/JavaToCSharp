@@ -15,6 +15,14 @@ public class NameExpressionVisitor : ExpressionVisitor<NameExpr>
             name = backingField;
         }
 
+        // Deconflicted field references (field + method sharing a name): a bare identifier that
+        // is NOT a declared local/parameter refers to the renamed field.
+        if (context.FieldNameRenames.TryGetValue(name, out string? renamedField)
+            && !context.VariableScopes.TryGetVariableType(name, out _))
+        {
+            name = renamedField;
+        }
+
         return SyntaxFactory.IdentifierName(TypeHelper.EscapeIdentifier(name));
     }
 }

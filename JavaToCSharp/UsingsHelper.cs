@@ -24,6 +24,49 @@ public static class UsingsHelper
 
             bool isStatic = import.isStatic();
 
+            // Single-type import of a NESTED type (import a.b.C.Nested — the segment before the
+            // leaf is a class name by Java's casing convention): C# has no using-form for nested
+            // types, so emit a USING ALIAS to the mapped target instead. The mapped target is
+            // either an existing dotted mapping row (TryMapTypeLeafName) or the enclosing
+            // package's mapped namespace with the capitalized outer type appended (a tree-typed
+            // outer like com.mojang.datafixers.DSL.TypeReference has no mapping row of its own).
+            if (!isStatic && importName.IndexOf('.') != lastPartStartIndex && lastPartStartIndex > 0)
+            {
+                var nestedSegments = importName[(importName.LastIndexOf('.', lastPartStartIndex - 1) + 1)..];
+                var nestedLeaf = importName[(lastPartStartIndex + 1)..];
+
+                if (TypeMapping.TypeMappingResolver.TryMapTypeLeafName(context, nestedSegments, out var mappedNested))
+                {
+                    usings.Add(MakeAliasUsing(context, import, nestedLeaf, mappedNested));
+                    continue;
+                }
+
+                var outerTailStart = importName.LastIndexOf('.', lastPartStartIndex - 1);
+                var outerName = importName[(outerTailStart + 1)..lastPartStartIndex];
+
+                // Tree-typed outer (e.g. com.mojang.datafixers.DSL.TypeReference has no dotted
+                // mapping row of its own): alias to the outer type's known namespace. JDK
+                // nested imports (java.util.Map.Entry) have no tree declaration and fall
+                // through unchanged.
+                if (context.Options.KnownTypeNamespaces is { Count: > 0 } known
+                    && known.TryGetValue(outerName.ToLowerInvariant(), out var outerNamespace)
+                    && !string.IsNullOrWhiteSpace(outerNamespace))
+                {
+                    var aliasTarget = outerNamespace + "." + TypeHelper.Capitalize(nestedLeaf);
+
+                    usings.Add(MakeAliasUsing(context, import, nestedLeaf, aliasTarget));
+                    continue;
+                }
+            }
+
+            // Remaining nested imports (package-adjacent uppercase tails with no resolvable
+            // mapping) fall through to bare-name import-scan resolution — nothing to emit.
+            if (!isStatic && importNameWithoutClassName.Contains('.')
+                && char.IsUpper(importNameWithoutClassName[(importNameWithoutClassName.LastIndexOf('.') + 1)]))
+            {
+                continue;
+            }
+
             if (isStatic)
             {
                 // Static import: "import static X.Y.Z.method" -> "using static X.Y.Z;"
@@ -52,23 +95,37 @@ public static class UsingsHelper
                 continue;
             }
 
-            var nameSpace = TypeHelper.Capitalize(importNameWithoutClassName);
-
-            // Derive the namespace from the mapping index's package-to-namespace rows.
+            // Derive the namespace(s) from the mapping index's package-to-namespace rows.
+            // A row may map to several C# namespaces (e.g. LWJGL bindings spread across
+            // Silk.NET packages); emit a using for each so every mapped type resolves.
             if (options?.MappingIndex is not null
                      && options.MappingIndex.TryGetCSharpPackages(importNameWithoutClassName, out var csharpPackages))
             {
-                nameSpace = csharpPackages[0];
+                for (var i = 0; i < csharpPackages.Length; i++)
+                {
+                    var usingSyntax = SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(csharpPackages[i]));
+
+                    if (context.Options.IncludeComments && i == 0)
+                    {
+                        usingSyntax = CommentsHelper.AddUsingComments(usingSyntax, import);
+                    }
+
+                    usings.Add(usingSyntax.NormalizeWhitespace().WithTrailingNewLines());
+                }
+
+                continue;
             }
 
-            var usingSyntax = SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(nameSpace));
+            var nameSpace = TypeHelper.Capitalize(importNameWithoutClassName);
+
+            var defaultUsingSyntax = SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(nameSpace));
 
             if (context.Options.IncludeComments)
             {
-                usingSyntax = CommentsHelper.AddUsingComments(usingSyntax, import);
+                defaultUsingSyntax = CommentsHelper.AddUsingComments(defaultUsingSyntax, import);
             }
 
-            usings.Add(usingSyntax.NormalizeWhitespace().WithTrailingNewLines());
+            usings.Add(defaultUsingSyntax.NormalizeWhitespace().WithTrailingNewLines());
         }
 
         if (options?.IncludeUsings == true)
@@ -94,6 +151,25 @@ public static class UsingsHelper
         }
 
         return usings;
+    }
+
+    /// <summary>
+    /// Builds the using-alias directive for a nested-type import:
+    /// <c>using NestedLeaf = Mapped.Outer.NestedLeaf;</c>
+    /// </summary>
+    private static UsingDirectiveSyntax MakeAliasUsing(
+        ConversionContext context, ImportDeclaration import, string nestedLeaf, string aliasTarget)
+    {
+        var aliasUsing = SyntaxFactory.UsingDirective(
+            SyntaxFactory.NameEquals(SyntaxFactory.IdentifierName(TypeHelper.EscapeIdentifier(nestedLeaf))),
+            SyntaxFactory.ParseTypeName(aliasTarget));
+
+        if (context.Options.IncludeComments)
+        {
+            aliasUsing = CommentsHelper.AddUsingComments(aliasUsing, import);
+        }
+
+        return aliasUsing.NormalizeWhitespace().WithTrailingNewLines();
     }
 }
 

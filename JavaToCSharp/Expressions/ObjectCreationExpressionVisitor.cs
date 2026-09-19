@@ -1,4 +1,4 @@
-﻿using com.github.javaparser.ast.body;
+using com.github.javaparser.ast.body;
 using com.github.javaparser.ast.expr;
 using JavaToCSharp.Declarations;
 using JavaToCSharp.TypeMapping;
@@ -35,6 +35,13 @@ public class ObjectCreationExpressionVisitor : ExpressionVisitor<ObjectCreationE
             if (inferred is not null)
             {
                 typeSyntax = inferred;
+            }
+            else
+            {
+                // A raw generic ("new ArrayList()") has no arguments to infer and is illegal in
+                // C# (CS0305): synthesize object arguments for known generic types.
+                typeSyntax = SyntaxFactory.ParseTypeName(
+                    TypeHelper.ConvertType(context, TypeHelper.GetFullTypeName(context, type)));
             }
         }
 
@@ -161,17 +168,22 @@ public class ObjectCreationExpressionVisitor : ExpressionVisitor<ObjectCreationE
 
     private static ObjectCreationExpressionSyntax VisitAnonymousClassCreationExpression(ConversionContext context, ObjectCreationExpr newExpr, List<BodyDeclaration> anonBody)
     {
-        string baseTypeName = TypeHelper.ConvertType(context, newExpr.getType().getNameAsString());
+        // The hoisted class name must be a plain C# identifier: only the Java simple name may
+        // flow into it. Raw-argument synthesis inside ConvertType would otherwise splice
+        // "<...>" (and a counter directly after ">") into the identifier, producing unparseable
+        // output such as `AnonymousCodec<object>1`.
+        string baseIdentifier = SanitizeAnonymousBaseName(newExpr.getType().getNameAsString());
+
         string anonTypeName = string.Empty;
 
-        for (int i = 0; i <= 100; i++)
+        for (int i = 0; i < 100; i++)
         {
-            if (i == 100)
+            if (i == 99)
             {
                 throw new InvalidOperationException("Too many anonymous types");
             }
 
-            anonTypeName = $"Anonymous{baseTypeName}{(i == 0 ? string.Empty : i.ToString())}";
+            anonTypeName = $"Anonymous{baseIdentifier}{(i == 0 ? string.Empty : i.ToString())}";
 
             if (context.UsedAnonymousTypeNames.Add(anonTypeName))
             {
@@ -185,24 +197,82 @@ public class ObjectCreationExpressionVisitor : ExpressionVisitor<ObjectCreationE
                 SyntaxFactory.Token(SyntaxKind.SealedKeyword))
             .WithBaseList(SyntaxFactory.BaseList(SyntaxFactory.SeparatedList(new List<BaseTypeSyntax>
             {
-                SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName(baseTypeName))
+                // The declared type (including any type arguments, explicit or synthesized)
+                // belongs in the base list — not in the hoisted class's identifier.
+                SyntaxFactory.SimpleBaseType(TypeHelper.GetSyntaxFromType(context, newExpr.getType()))
             })));
 
-        string? contextLastTypeName = context.LastTypeName;
+        // Java anonymous classes capture the enclosing instance only when the creation
+        // expression sits in an instance (non-static) member context. Static fields, static
+        // methods and interface members never capture — and emitting `this` there would not
+        // even be valid C#.
+        string? contextLastTypeName = IsInStaticMemberContext(newExpr) ? null : context.LastTypeName;
+
+        // Java anonymous bodies see the enclosing type's type parameters; C# nested classes do
+        // not. Make the hoisted class generic over the enclosing parameters the body actually
+        // references, and pass them at the usage site — preserving types instead of erasing
+        // them to object.
+        var bodyText = string.Join("\n", anonBody.Select(member => member.toString()));
+        var referencedParameters = new List<TypeParameter>();
+        var seenParameterNames = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var typeParameter in context.TypeParameterNodes)
+        {
+            var parameterName = typeParameter.getNameAsString();
+
+            if (seenParameterNames.Add(parameterName)
+                && System.Text.RegularExpressions.Regex.IsMatch(bodyText, @"\b" + System.Text.RegularExpressions.Regex.Escape(parameterName) + @"\b"))
+            {
+                referencedParameters.Add(typeParameter);
+            }
+        }
 
         if (contextLastTypeName is not null)
         {
-            var parentField = SyntaxFactory.FieldDeclaration(SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName(contextLastTypeName))
+            // The enclosing instance carries the enclosing type's own type parameters
+            // (`Sorter.this` inside `class Sorter<T>` is Sorter<T>) — a raw spelling of a
+            // generic type is CS0305 in the hoisted class. The hoisted class is generic over
+            // the parameters the body references (same set), so spell them out; mismatched
+            // arities fall back to object fill.
+            var parentTypeText = contextLastTypeName;
+            var parentArity = 0;
+            context.Options.KnownGenericArity?.TryGetValue(contextLastTypeName, out parentArity);
+
+            if (parentArity > 0)
+            {
+                var parentArgs = referencedParameters.Select(parameter => parameter.getNameAsString()).ToList();
+
+                if (parentArgs.Count != parentArity)
+                {
+                    parentArgs = context.TypeParameterNames.Take(parentArity).ToList();
+                }
+
+                parentTypeText += "<" + string.Join(", ",
+                    parentArgs.Count == parentArity ? parentArgs : Enumerable.Repeat("object", parentArity)) + ">";
+            }
+
+            var parentField = SyntaxFactory.FieldDeclaration(SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName(parentTypeText))
                                                                           .AddVariables(SyntaxFactory.VariableDeclarator("parent")))
                                            .AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword));
 
             var ctorSyntax = SyntaxFactory.ConstructorDeclaration(anonTypeName)
                                           .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword))
-                                          .AddParameterListParameters(SyntaxFactory.Parameter(SyntaxFactory.ParseToken("parent")).WithType(SyntaxFactory.ParseTypeName(contextLastTypeName)))
+                                          .AddParameterListParameters(SyntaxFactory.Parameter(SyntaxFactory.ParseToken("parent")).WithType(SyntaxFactory.ParseTypeName(parentTypeText)))
                                           .AddBodyStatements(SyntaxFactory.ExpressionStatement(SyntaxFactory.AssignmentExpression(SyntaxKind.SimpleAssignmentExpression, SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.ThisExpression(), SyntaxFactory.IdentifierName("parent")), SyntaxFactory.IdentifierName("parent"))));
 
             classSyntax = classSyntax.AddMembers(ctorSyntax, parentField);
         }
+
+        if (referencedParameters.Count > 0)
+        {
+            classSyntax = classSyntax.AddTypeParameterListParameters(referencedParameters
+                .Select(parameter => SyntaxFactory.TypeParameter(parameter.getNameAsString())).ToArray());
+            classSyntax = classSyntax.AddConstraintClauses(TypeHelper.GetTypeParameterListConstraints(context, referencedParameters).ToArray());
+        }
+
+        var usageTypeName = referencedParameters.Count > 0
+            ? anonTypeName + "<" + string.Join(", ", referencedParameters.Select(parameter => parameter.getNameAsString())) + ">"
+            : anonTypeName;
 
         // TODO.PI: do we need to pass extends/implements here?
         foreach (var memberSyntax in anonBody
@@ -218,13 +288,88 @@ public class ObjectCreationExpressionVisitor : ExpressionVisitor<ObjectCreationE
 
         if (args is null || args.size() == 0)
         {
-            return SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName(anonTypeName))
-                .AddArgumentListArguments(SyntaxFactory.Argument(SyntaxFactory.ThisExpression()));
+            var creation = SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName(usageTypeName));
+
+            if (contextLastTypeName is not null)
+            {
+                return creation.AddArgumentListArguments(SyntaxFactory.Argument(SyntaxFactory.ThisExpression()));
+            }
+
+            return creation.WithArgumentList(SyntaxFactory.ArgumentList());
         }
 
-        return SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName(anonTypeName),
+        return SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName(usageTypeName),
             TypeHelper.GetSyntaxFromArguments(context, args),
             null);
+    }
+
+    private static string SanitizeAnonymousBaseName(string name)
+    {
+        var identifierChars = (name ?? string.Empty).Where(char.IsLetterOrDigit).ToArray();
+
+        if (identifierChars.Length == 0)
+        {
+            return "Type";
+        }
+
+        return char.IsDigit(identifierChars[0])
+            ? "_" + new string(identifierChars)
+            : new string(identifierChars);
+    }
+
+    /// <summary>
+    /// Walks up from the anonymous creation expression to the nearest enclosing member and
+    /// reports whether that member is static. Static contexts (static fields/methods, static
+    /// initializers, interface constants) have no enclosing instance in Java, so the hoisted
+    /// class must not receive a parent field or a `this` argument.
+    /// </summary>
+    private static bool IsInStaticMemberContext(ObjectCreationExpr newExpr)
+    {
+        var parent = newExpr.getParentNode().FromOptional<Node>();
+
+        while (parent is not null)
+        {
+            switch (parent)
+            {
+                case MethodDeclaration method:
+                    // Default interface methods are instance contexts; only explicitly static
+                    // methods (or static interface methods) are static.
+                    return method.getModifiers().ToModifierKeywordSet().Contains(com.github.javaparser.ast.Modifier.Keyword.STATIC);
+                case ConstructorDeclaration:
+                    return false;
+                case FieldDeclaration field:
+                    // Interface fields are implicitly static even without the modifier.
+                    return field.getModifiers().ToModifierKeywordSet().Contains(com.github.javaparser.ast.Modifier.Keyword.STATIC)
+                        || IsDeclaredInInterface(field);
+                case InitializerDeclaration initializer:
+                    return initializer.isStatic();
+                case EnumConstantDeclaration:
+                    // An enum constant's body is an instance context of its anonymous subclass.
+                    return false;
+            }
+
+            parent = parent.getParentNode().FromOptional<Node>();
+        }
+
+        return false;
+    }
+
+    private static bool IsDeclaredInInterface(Node node)
+    {
+        var parent = node.getParentNode().FromOptional<Node>();
+
+        while (parent is not null)
+        {
+            if (parent is ClassOrInterfaceDeclaration typeDeclaration)
+            {
+                // The first type declaration up the chain is the declaring type.
+                return typeDeclaration.isInterface();
+            }
+
+            parent = parent.getParentNode().FromOptional<Node>();
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -250,10 +395,10 @@ public class ObjectCreationExpressionVisitor : ExpressionVisitor<ObjectCreationE
                 var typeArgs = classType.getTypeArguments().FromOptional<NodeList>()?.ToList<Type>();
                 if (typeArgs is { Count: > 0 })
                 {
-                    var typeName = TypeHelper.ConvertType(context, type.getNameAsString());
+                    var typeName = TypeHelper.ConvertType(context, type.getNameAsString(), synthesizeRawArguments: false);
                     return SyntaxFactory.GenericName(typeName)
                         .AddTypeArgumentListArguments(typeArgs
-                            .Select(t => SyntaxFactory.ParseTypeName(TypeHelper.ConvertType(context, t.toString())))
+                            .Select(t => TypeHelper.ConvertTypeSyntax(context, t, 0))
                             .ToArray());
                 }
             }
@@ -273,7 +418,7 @@ public class ObjectCreationExpressionVisitor : ExpressionVisitor<ObjectCreationE
                     if (genericStart >= 0)
                     {
                         var inner = declaredType.Substring(genericStart + 1, declaredType.LastIndexOf('>') - genericStart - 1);
-                        var typeName = TypeHelper.ConvertType(context, type.getNameAsString());
+                        var typeName = TypeHelper.ConvertType(context, type.getNameAsString(), synthesizeRawArguments: false);
                         var typeArgStrings = SplitTopLevelTypeArgs(inner);
                         if (typeArgStrings.Count > 0)
                         {
@@ -317,3 +462,4 @@ public class ObjectCreationExpressionVisitor : ExpressionVisitor<ObjectCreationE
         return result;
     }
 }
+

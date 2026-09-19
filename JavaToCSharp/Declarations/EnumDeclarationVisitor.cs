@@ -76,13 +76,66 @@ public class EnumDeclarationVisitor : BodyDeclarationVisitor<EnumDeclaration>
         // Nested constant subclasses require a non-sealed base; use abstract when needed
         bool isAbstract = hasAbstractMethod || entries.Any(e => !e.getClassBody().isEmpty());
 
+        // Java enums allow a field and a method to share a simple name; C# rejects the pair
+        // (CS0102). Run the same prescan classes get so the FIELD is renamed (name + "Field")
+        // through FieldNameRenames while the method — the cross-file-stable side — keeps its
+        // name. Without this, enum members like `transformation` (field + accessor) collide
+        // once the synthetic name/ordinal members are also present.
+        ClassOrInterfaceDeclarationVisitor.PreScanFieldMethodCollisionsForEnum(context, members);
+
+        // The converted enum form adds synthetic members: name()/ordinal() methods, and
+        // values()/valueOf() methods. A user FIELD sharing a synthetic method's simple name is a
+        // CS0102 collision — rename the field (the method name is the cross-file-stable side).
+        // Java forbids user methods named name/ordinal (final on java.lang.Enum), but values()/
+        // valueOf() can be user-declared — in that case the user's method wins and the synthetic
+        // one is skipped (a duplicate would be CS0111).
+        foreach (var field in members.OfType<FieldDeclaration>())
+        {
+            foreach (var variable in field.getVariables()?.ToList<VariableDeclarator>() ?? [])
+            {
+                var fieldName = variable.getNameAsString();
+
+                if (fieldName is "name" or "ordinal")
+                {
+                    context.FieldNameRenames[fieldName] = fieldName + "Field";
+                }
+            }
+        }
+
+        bool userDefinesValues = members.OfType<MethodDeclaration>().Any(m => m.getNameAsString() == "values");
+        bool userDefinesValueOf = members.OfType<MethodDeclaration>().Any(m => m.getNameAsString() == "valueOf");
+
         var classSyntax = SyntaxFactory.ClassDeclaration(name);
 
         var mods = enumDecl.getModifiers().ToModifierKeywordSet();
 
         classSyntax = ModifierHelper.AddAccessModifiers(classSyntax, mods);
+        if (ModifierHelper.IsPackagePrivate(mods))
+        {
+            // Java package-private enums referenced by public members (or cross-file) are less
+            // accessible in C# (CS0050/CS0051) — promote to public.
+            classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword));
+        }
+        else if (mods.Contains(Modifier.Keyword.PRIVATE))
+        {
+            // Java allows a private nested enum in a public member signature (erasure); C#
+            // rejects the combination — promote (replaces the private token, CS0107-safe).
+            classSyntax = ModifierHelper.ReplacePrivateWithPublic(classSyntax);
+        }
+        else if (mods.Contains(Modifier.Keyword.PROTECTED))
+        {
+            // Java protected nested types are reachable package-wide; C# protected restricts to
+            // subclasses, which breaks sibling-file references (CS0122) and public signatures
+            // (CS0050/CS0051). Promote to public — same rule as nested classes/records.
+            classSyntax = ModifierHelper.ReplaceProtectedWithPublic(classSyntax);
+        }
         if (isAbstract)
             classSyntax = classSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.AbstractKeyword));
+
+        // Placeholders synthesized from here on belong to this enum (Java enums have no base
+        // list of their own, so ownership starts immediately).
+        var previousPlaceholderOwner = context.CurrentPlaceholderOwner;
+        context.CurrentPlaceholderOwner = name;
 
         // Qualify switch labels / unqualified references for this enum's constants
         foreach (var entry in entries)
@@ -214,6 +267,9 @@ public class EnumDeclarationVisitor : BodyDeclarationVisitor<EnumDeclaration>
             {
                 nestedTypes.Add(context.PendingAnonymousTypes.Dequeue());
             }
+
+            context.DrainPlaceholderTypes(context.CurrentPlaceholderOwner,
+                placeholder => nestedTypes.Add(placeholder));
         }
 
         foreach (var field in convertedFields)
@@ -248,9 +304,15 @@ public class EnumDeclarationVisitor : BodyDeclarationVisitor<EnumDeclaration>
 
         var constantNames = entries.Select(e => e.getNameAsString()).ToList();
 
-        classSyntax = classSyntax.AddMembers(
-            EnumSyntaxHelpers.CreateValuesMethod(enumTypeSyntax, constantNames),
-            EnumSyntaxHelpers.CreateValueOfMethod(enumTypeSyntax, name, constantNames));
+        if (!userDefinesValues)
+        {
+            classSyntax = classSyntax.AddMembers(EnumSyntaxHelpers.CreateValuesMethod(enumTypeSyntax, constantNames));
+        }
+
+        if (!userDefinesValueOf)
+        {
+            classSyntax = classSyntax.AddMembers(EnumSyntaxHelpers.CreateValueOfMethod(enumTypeSyntax, name, constantNames));
+        }
 
         for (int ordinal = 0; ordinal < entries.Count; ordinal++)
         {
@@ -262,6 +324,8 @@ public class EnumDeclarationVisitor : BodyDeclarationVisitor<EnumDeclaration>
         {
             classSyntax = classSyntax.AddMembers(nested);
         }
+
+        context.CurrentPlaceholderOwner = previousPlaceholderOwner;
 
         return WithEnumConversionComment(
             classSyntax.WithJavaComments(context, enumDecl) ?? classSyntax, name);
@@ -300,15 +364,25 @@ public class EnumDeclarationVisitor : BodyDeclarationVisitor<EnumDeclaration>
         var ctorSyntax = SyntaxFactory.ConstructorDeclaration(identifier)
             .AddModifiers(SyntaxFactory.Token(SyntaxKind.ProtectedKeyword));
 
+        var parameters = ctorDecl.getParameters().ToList<Parameter>() ?? [];
+
+        // The synthetic name/ordinal parameters mirror javac's own enum construction; when the
+        // user's constructor already declares a parameter with the same name, disambiguate by
+        // appending underscores (name_, name__, ...) until the identifier is unique.
+        var userParamNames = new HashSet<string>(
+            parameters.Select(p => TypeHelper.EscapeIdentifier(p.getNameAsString())),
+            StringComparer.Ordinal);
+        var nameParamName = GetDisambiguatedSyntheticName(userParamNames, "name");
+        var ordinalParamName = GetDisambiguatedSyntheticName(userParamNames, "ordinal");
+
         var paramSyntaxes = new List<ParameterSyntax>
         {
-            SyntaxFactory.Parameter(SyntaxFactory.Identifier("name"))
+            SyntaxFactory.Parameter(SyntaxFactory.Identifier(nameParamName))
                 .WithType(SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.StringKeyword))),
-            SyntaxFactory.Parameter(SyntaxFactory.Identifier("ordinal"))
+            SyntaxFactory.Parameter(SyntaxFactory.Identifier(ordinalParamName))
                 .WithType(SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.IntKeyword)))
         };
 
-        var parameters = ctorDecl.getParameters().ToList<Parameter>() ?? [];
         foreach (var param in parameters)
         {
             string paramName = TypeHelper.EscapeIdentifier(param.getNameAsString());
@@ -323,7 +397,7 @@ public class EnumDeclarationVisitor : BodyDeclarationVisitor<EnumDeclaration>
             {
                 paramSyntaxes.Add(
                     SyntaxFactory.Parameter(SyntaxFactory.Identifier(paramName))
-                        .WithType(SyntaxFactory.ParseTypeName(TypeHelper.ConvertTypeOf(context, param))));
+                        .WithType(TypeHelper.ConvertTypeSyntax(context, param.getType(), param.getType().getArrayLevel())));
             }
         }
 
@@ -335,8 +409,8 @@ public class EnumDeclarationVisitor : BodyDeclarationVisitor<EnumDeclaration>
         // Enum ctors always take synthetic name/ordinal first; pass them through this()/base().
         var prependArgs = new List<ArgumentSyntax>
         {
-            SyntaxFactory.Argument(SyntaxFactory.IdentifierName("name")),
-            SyntaxFactory.Argument(SyntaxFactory.IdentifierName("ordinal"))
+            SyntaxFactory.Argument(SyntaxFactory.IdentifierName(nameParamName)),
+            SyntaxFactory.Argument(SyntaxFactory.IdentifierName(ordinalParamName))
         };
 
         var (initializer, remainingStatements) = ConstructorConversion.ExtractInitializer(
@@ -355,13 +429,29 @@ public class EnumDeclarationVisitor : BodyDeclarationVisitor<EnumDeclaration>
         // Chained this(...) already assigns name/ordinal in the target constructor.
         if (!chainsToThis)
         {
-            bodyStatements.Add(CreateSimpleAssignment("_name", "name"));
-            bodyStatements.Add(CreateSimpleAssignment("_ordinal", "ordinal"));
+            bodyStatements.Add(CreateSimpleAssignment("_name", nameParamName));
+            bodyStatements.Add(CreateSimpleAssignment("_ordinal", ordinalParamName));
         }
 
         bodyStatements.AddRange(StatementVisitor.VisitStatements(context, remainingStatements));
 
         return ctorSyntax.WithBody(SyntaxFactory.Block(bodyStatements));
+    }
+
+    private static string GetDisambiguatedSyntheticName(HashSet<string> userParamNames, string baseName)
+    {
+        if (!userParamNames.Contains(baseName))
+        {
+            return baseName;
+        }
+
+        var candidate = baseName;
+        while (userParamNames.Contains(candidate))
+        {
+            candidate += "_";
+        }
+
+        return candidate;
     }
 
     private static ConstructorDeclarationSyntax CreateDefaultEnumConstructor(string typeName)

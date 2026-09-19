@@ -184,6 +184,16 @@ public sealed class ClassMappingBuilder
         return this;
     }
 
+    /// <summary>
+    /// Sets whether a bare simple name imported via a single-type import resolves through this
+    /// class (nested-type rewrite rows). Pairs with MatchQualifiedOnly.
+    /// </summary>
+    internal ClassMappingBuilder SetImportResolvable(bool importResolvable)
+    {
+        _dto.ImportResolvable = importResolvable ? true : null;
+        return this;
+    }
+
     /// <summary>Maps a method to a renamed method with the same call shape: <c>Math.pow(a, b)</c>
     /// → <c>Math.Pow(a, b)</c>.</summary>
     public ClassMappingBuilder Rename(
@@ -289,6 +299,23 @@ public sealed class ClassMappingBuilder
             ClassMap = nestedClasses.Count > 0 ? nestedClasses : null,
         };
         _entries.Add(dto);
+        return this;
+    }
+
+    /// <summary>
+    /// Marks every entry with the given Java member name as static. Used when copying an
+    /// existing index so the <c>static</c> flag survives a builder round-trip.
+    /// </summary>
+    internal ClassMappingBuilder MarkStatic(string javaMember)
+    {
+        foreach (var entry in _entries)
+        {
+            if (entry.JavaMember == javaMember)
+            {
+                entry.Static = true;
+            }
+        }
+
         return this;
     }
 

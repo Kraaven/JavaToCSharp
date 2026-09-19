@@ -83,6 +83,40 @@ public class MethodReferenceExpressionVisitor : ExpressionVisitor<MethodReferenc
             }
         }
 
+        // Unbound references to a type's method ("Pattern::asPredicate") resolve through the
+        // mapping index the same way: look the scope type up by simple name and match the
+        // referenced member. A template entry emits the mapped expression with the receiver
+        // lambda parameter as "$0" (e.g. "new Predicate<string>(s => mrefArg.IsMatch(s))"); a
+        // rename entry emits an invocation on the receiver parameter. Without this, references
+        // into types declared outside the file degraded to a parameterless invocation such as
+        // "Regex.asPredicate()", which does not exist on the mapped C# type.
+        if (!methodResolved
+            && isUnbound
+            && scopeVariableName is not null
+            && TryResolveTypeScopedReferenceThroughMapping(context, scopeVariableName, expr.getIdentifier(),
+                out var typeScopedEntry, out var typeScopedArity)
+            && EmitMappedTypeScopedReference(context, expr, typeScopedEntry, typeScopedArity) is { } mappedLambda)
+        {
+            if (typeScopedEntry.IsStatic)
+            {
+                // The mapping declares the member static: keep the static-style invocation
+                // shape ("Type.Method(args)" — no receiver lambda parameter) and continue
+                // through the generic emission path below with the mapped member name.
+                methodResolved = true;
+                isStatic = true;
+                paramCount = typeScopedArity;
+
+                if (typeScopedEntry.CSharpMember is { } staticMappedName)
+                {
+                    methodName = staticMappedName;
+                }
+            }
+            else
+            {
+                return mappedLambda;
+            }
+        }
+
         var lambdaParameters = new List<ParameterSyntax>();
 
         // Build the receiver part of the invocation and the parameters feeding it.
@@ -151,7 +185,7 @@ public class MethodReferenceExpressionVisitor : ExpressionVisitor<MethodReferenc
         SimpleNameSyntax methodSimpleName = expr.getTypeArguments().FromOptional<NodeList>() is { } typeArgs
             && typeArgs.ToList<Type>() is { Count: > 0 } typeList
             ? SyntaxFactory.GenericName(methodName).AddTypeArgumentListArguments(typeList
-                .Select(t => SyntaxFactory.ParseTypeName(TypeHelper.ConvertType(context, t.toString())))
+                .Select(t => TypeHelper.ConvertTypeSyntax(context, t, 0))
                 .ToArray())
             : SyntaxFactory.IdentifierName(methodName);
 
@@ -261,6 +295,132 @@ public class MethodReferenceExpressionVisitor : ExpressionVisitor<MethodReferenc
         paramCount = withArity.ArgCount.GetValueOrDefault();
         mappedMemberName = withArity.CSharpMember;
         return true;
+    }
+
+    /// <summary>
+    /// Attempts to resolve an unbound method reference's member ("Pattern::asPredicate") through
+    /// the mapping index, using the simple name of the type on the left of "::". Returns the
+    /// matching member entry (template or rename) and the parameter count the emitted lambda
+    /// should forward. Returns false when the type or member is not mapped (or the simple name is
+    /// ambiguous across the mapping index).
+    /// </summary>
+    private static bool TryResolveTypeScopedReferenceThroughMapping(
+        ConversionContext context,
+        string scopeSimpleTypeName,
+        string javaMemberName,
+        out MemberMapping entry,
+        out int paramCount)
+    {
+        entry = null!;
+        paramCount = 0;
+
+        var index = context.Options.MappingIndex;
+        if (index is null
+            || !index.TryGetBySimpleName(scopeSimpleTypeName, out var cls, out var ambiguous)
+            || ambiguous
+            || cls is null)
+        {
+            return false;
+        }
+
+        var candidates = cls.Entries
+            .Where(m => string.Equals(m.JavaMember, javaMemberName, StringComparison.Ordinal)
+                && m.MemberType == MemberMappingType.Method
+                && m.Kind != MemberMappingKind.Unsupported)
+            .ToList();
+
+        if (candidates.Count == 0)
+        {
+            return false;
+        }
+
+        // Same arity preference as TryResolveMemberThroughMapping: the largest explicit argument
+        // count wins; variadic entries forward a single value from a method reference.
+        var withArity = candidates
+            .Where(m => m.ArgCount is { } count && !m.IsVariadic)
+            .OrderByDescending(m => m.ArgCount.GetValueOrDefault())
+            .FirstOrDefault();
+
+        if (withArity is null)
+        {
+            withArity = candidates.FirstOrDefault(m => m.IsVariadic);
+            if (withArity is null)
+            {
+                return false;
+            }
+
+            entry = withArity;
+            paramCount = 1;
+            return true;
+        }
+
+        entry = withArity;
+        paramCount = withArity.ArgCount.GetValueOrDefault();
+        return true;
+    }
+
+    /// <summary>
+    /// Emits the lambda for an unbound method reference resolved through the mapping index:
+    /// "(mrefArg) => mapped" where the receiver type is the first lambda parameter. Template
+    /// entries are filled with the receiver parameter as "$0"; rename entries emit an invocation
+    /// of the mapped C# member on the receiver parameter with the remaining forwarded arguments.
+    /// Returns null when a template entry cannot be filled, letting the caller fall back.
+    /// </summary>
+    private static ExpressionSyntax? EmitMappedTypeScopedReference(
+        ConversionContext context,
+        MethodReferenceExpr expr,
+        MemberMapping entry,
+        int paramCount)
+    {
+        var receiverName = context.NextTempName("mrefArg");
+        var lambdaParameters = new List<ParameterSyntax>
+        {
+            SyntaxFactory.Parameter(SyntaxFactory.Identifier(receiverName)),
+        };
+
+        var valueArgNames = new List<string>();
+        for (var i = 0; i < paramCount; i++)
+        {
+            var name = context.NextTempName("mrefArg");
+            lambdaParameters.Add(SyntaxFactory.Parameter(SyntaxFactory.Identifier(name)));
+            valueArgNames.Add(name);
+        }
+
+        ExpressionSyntax body;
+
+        if (entry.Kind == MemberMappingKind.Template && entry.Expression is not null)
+        {
+            if (!TypeMappingResolver.TryFillTemplate(context, receiverName, entry.Expression, null, out var filled))
+            {
+                return null;
+            }
+
+            body = filled;
+        }
+        else
+        {
+            var memberName = entry.CSharpMember
+                ?? (context.PreserveJavaMethodNames ? entry.JavaMember : TypeHelper.Capitalize(entry.JavaMember));
+            var methodSimpleName = SyntaxFactory.IdentifierName(TypeHelper.EscapeMemberName(memberName));
+
+            var invocation = SyntaxFactory.InvocationExpression(
+                SyntaxFactory.MemberAccessExpression(
+                    SyntaxKind.SimpleMemberAccessExpression,
+                    SyntaxFactory.IdentifierName(receiverName),
+                    methodSimpleName));
+
+            if (valueArgNames.Count > 0)
+            {
+                invocation = invocation.AddArgumentListArguments(valueArgNames
+                    .Select(a => SyntaxFactory.Argument(SyntaxFactory.IdentifierName(a)))
+                    .ToArray());
+            }
+
+            body = invocation;
+        }
+
+        var lambda = SyntaxFactory.ParenthesizedLambdaExpression(body);
+        return lambda.AddParameterListParameters(lambdaParameters.ToArray());
     }
 
     /// <summary>
@@ -461,3 +621,4 @@ public class MethodReferenceExpressionVisitor : ExpressionVisitor<MethodReferenc
         return SyntaxFactory.ArrayCreationExpression(arrayTypeSyntax);
     }
 }
+
